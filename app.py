@@ -345,38 +345,6 @@ def extract_certificate_info(text: str) -> Dict[str, any]:
             }
     
     return results
-    """Extract certificate information from text using semantic analysis."""
-    results = {}
-    
-    processed_text = preprocess_text(text)
-    
-    for field, target_phrases in TARGET_FIELDS.items():
-        try:
-            # First try semantic similarity
-            relevant_text, similarity_score = find_relevant_text_semantic(
-                processed_text, target_phrases
-            )
-            
-            # Try pattern matching for specific fields
-            pattern_match = extract_specific_patterns(relevant_text, field)
-            
-            results[field] = {
-                "extracted_text": relevant_text if relevant_text else "Não encontrado",
-                "confidence_score": similarity_score,
-                "pattern_match": pattern_match,
-                "value": pattern_match if pattern_match else relevant_text
-            }
-            
-        except Exception as e:
-            logger.error(f"Error extracting {field}: {e}")
-            results[field] = {
-                "extracted_text": "Erro na extração",
-                "confidence_score": 0.0,
-                "pattern_match": None,
-                "value": "Erro na extração"
-            }
-    
-    return results
 
 
 @app.route('/health', methods=['GET'])
