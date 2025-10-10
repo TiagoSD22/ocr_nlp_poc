@@ -1,15 +1,45 @@
-version: '3.8'
+networks:
+  ocr-network:
+    driver: bridge
+
+volumes:
+  ollama-data:
+    driver: local
 
 services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ocr-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - ocr-network
+    env_file:
+      - .env
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
   certificate-ocr:
     build: .
+    container_name: ocr-flask-app
     ports:
       - "5000:5000"
-    environment:
-      - FLASK_ENV=production
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./uploads:/tmp/uploads
+    env_file:
+      - .env
+    networks:
+      - ocr-network
+    depends_on:
+      ollama:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
