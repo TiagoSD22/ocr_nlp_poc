@@ -1,0 +1,23 @@
+meta {
+  name: Submit file
+  type: http
+  seq: 1
+}
+
+post {
+  url: http:/localhost:5000/extract-certificate
+  body: multipartForm
+  auth: inherit
+}
+
+body:multipart-form {
+  file: @file(C:\Users\dante\Downloads\certificado_exemplo_imagem.jpg)
+}
+
+body:file {
+  file: @file(C:\Users\dante\Downloads\certificado_exemplo.pdf) @contentType(application/pdf)
+}
+
+settings {
+  encodeUrl: true
+}
