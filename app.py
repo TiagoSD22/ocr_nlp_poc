@@ -68,14 +68,6 @@ def ensure_model_available():
         logger.error(f"Error ensuring model availability: {e}")
         return False
 
-ollama_available = test_ollama_connection()
-if ollama_available:
-    logger.info("Ollama connection successful")
-    model_available = ensure_model_available()
-    if not model_available:
-        logger.warning(f"Model {OLLAMA_MODEL} not available - extraction will use fallback patterns")
-else:
-    logger.warning("Ollama not available - extraction will use fallback patterns")
 
 def allowed_file(filename: str) -> bool:
     """Check if the file extension is allowed."""
@@ -137,8 +129,11 @@ OCR Text:
 JSON Response:"""
 
     try:
+        ollama_available = test_ollama_connection()
+
         if not ollama_available:
-            logger.warning("Ollama not available, using fallback extraction")
+            logger.warning("Ollama not available")
+            return
         
         payload = {
             "model": OLLAMA_MODEL,
@@ -146,8 +141,7 @@ JSON Response:"""
             "stream": False,
             "options": {
                 "temperature": 0.1,  # Low temperature for consistent extraction
-                "top_p": 0.9,
-                "stop": ["\n\n", "---"]
+                "top_p": 0.9
             }
         }
         
@@ -156,7 +150,7 @@ JSON Response:"""
         response = requests.post(
             f"{OLLAMA_BASE_URL}/api/generate",
             json=payload,
-            timeout=30
+            timeout=90
         )
         
         logger.info(f"Ollama response status: {response.status_code}")
@@ -165,7 +159,7 @@ JSON Response:"""
             result = response.json()
             llm_response = result.get('response', '').strip()
             
-            logger.info(f"LLM raw response: {llm_response[:200]}...")  # Log first 200 chars
+            logger.info(f"LLM raw response: {llm_response}...")  # Log first 200 chars
             
             # Try to parse JSON response
             try:
@@ -213,7 +207,7 @@ def extract_certificate_info(text: str) -> Dict[str, any]:
         
         # Format the response to match the expected API structure
         results = {}
-        extraction_method = "llm" if ollama_available else "fallback_patterns"
+        extraction_method = "llm"
         
         for field_name, value in extracted_fields.items():
             results[field_name] = {
@@ -258,51 +252,6 @@ def health_check():
         "model_downloaded": model_status,
         "tesseract_available": True
     })
-
-
-@app.route('/debug-llm', methods=['POST'])
-def debug_llm():
-    """Debug endpoint to test LLM directly."""
-    try:
-        data = request.get_json()
-        test_prompt = data.get('prompt', 'Hello, please respond with: {"test": "success"}')
-        
-        payload = {
-            "model": OLLAMA_MODEL,
-            "prompt": test_prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.1
-            }
-        }
-        
-        response = requests.post(
-            f"{OLLAMA_BASE_URL}/api/generate",
-            json=payload,
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            return jsonify({
-                "success": True,
-                "status_code": response.status_code,
-                "raw_response": result,
-                "llm_response": result.get('response', ''),
-                "model_used": OLLAMA_MODEL
-            })
-        else:
-            return jsonify({
-                "success": False,
-                "status_code": response.status_code,
-                "error": response.text
-            }), response.status_code
-            
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
 
 
 @app.route('/extract-certificate', methods=['POST'])
