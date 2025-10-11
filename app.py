@@ -99,41 +99,60 @@ def extract_text_from_image(image: Image.Image) -> str:
         raise
 
 
-def preprocess_text(text: str) -> str:
-    """Clean and preprocess extracted text."""
-    # Remove extra whitespace and normalize
-    text = ' '.join(text.split())
-    # Remove special characters but keep accents
-    text = re.sub(r'[^\w\sÀ-ÿ.,;:()\-]', ' ', text)
-    return text.strip()
-
-
 def extract_fields_with_llm(text: str) -> Dict[str, any]:
-    """
-    Extract certificate fields using Ollama LLM.
-    Returns structured data with extracted fields.
-    """
-    prompt = f"""You are an intelligent document parser. Given the raw OCR text from a certificate, extract the following fields in JSON format:
+    prompt = f"""You are an intelligent document parser specialized in Brazilian Portuguese certificates. 
 
-nome_participante: The full name of the participant/person receiving the certificate
-evento: The name of the event, course, workshop, training, or activity
-local: The location, city, or place where the event took place
-data: The date when the event occurred (in the format found in the document)
-carga_horaria: The duration or workload hours of the activity
+Your task:
+1. First, clean the OCR text by removing artifacts and special characters
+2. Then extract the required fields from the cleaned text
 
-If any field is missing or unclear, return null for that field. Return ONLY a valid JSON object with these exact field names.
+CLEANING RULES:
+- Remove OCR artifacts like (68), ®, ©, @, symbols in parentheses, etc.
+- Fix broken words and incorrect spacing
+- Remove unnecessary line breaks that split words
+- Keep all meaningful information (names, dates, places, course details)
+- Make text coherent in Portuguese BR
+
+EXTRACTION RULES:
+Extract these exact fields in JSON format:
+- nome_participante: Full name of the certificate recipient
+- evento: Name of the event/course/workshop/training
+- local: Location, city, or institution where event took place  
+- data: Date when event occurred (keep original format)
+- carga_horaria: Duration or workload hours
+
+CRITICAL FORMAT REQUIREMENTS:
+- Return ONLY a valid JSON object with these exact field names
+- Use null for missing/unclear fields
+- Do not include explanations or code blocks
+- Each field should appear ONLY ONCE in the JSON
+- Field names must be exactly as specified (no extra spaces)
+- Process the text considering Portuguese BR language patterns
+
+Example format:
+{{
+  "nome_participante": "Full Name Here",
+  "evento": "Event Name Here",
+  "local": "Location Here",
+  "data": "Date Here",
+  "carga_horaria": "Hours Here"
+}}
 
 OCR Text:
 {text}
 
-JSON Response:"""
+JSON:"""
 
     try:
-        ollama_available = test_ollama_connection()
-
-        if not ollama_available:
-            logger.warning("Ollama not available")
-            return
+        if not test_ollama_connection():
+            logger.error("Ollama not available - cannot extract fields")
+            return {
+                'nome_participante': None,
+                'evento': None,
+                'local': None,
+                'data': None,
+                'carga_horaria': None
+            }
         
         payload = {
             "model": OLLAMA_MODEL,
@@ -146,6 +165,7 @@ JSON Response:"""
         }
         
         logger.info(f"Sending request to Ollama with model: {OLLAMA_MODEL}")
+        logger.info(f"Prompt full text: {prompt}")
         
         response = requests.post(
             f"{OLLAMA_BASE_URL}/api/generate",
@@ -159,11 +179,11 @@ JSON Response:"""
             result = response.json()
             llm_response = result.get('response', '').strip()
             
-            logger.info(f"LLM raw response: {llm_response}...")  # Log first 200 chars
+            logger.info(f"LLM raw response: {llm_response[:200]}...")
             
             # Try to parse JSON response
             try:
-                # Clean the response to extract JSON
+                # First, try to parse as JSON
                 if '{' in llm_response and '}' in llm_response:
                     start = llm_response.find('{')
                     end = llm_response.rfind('}') + 1
@@ -179,8 +199,9 @@ JSON Response:"""
                         if field not in extracted_data:
                             extracted_data[field] = None
                     
-                    logger.info("Successfully extracted fields using LLM")
+                    logger.info("Successfully extracted fields using LLM (JSON format)")
                     return extracted_data
+                
                 else:
                     logger.error("No valid JSON found in LLM response")
                     logger.error(f"Full LLM response: {llm_response}")
@@ -188,22 +209,38 @@ JSON Response:"""
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse LLM JSON response: {e}")
                 logger.error(f"LLM response was: {llm_response}")
+            except Exception as e:
+                logger.error(f"Error parsing LLM response: {e}")
+                logger.error(f"LLM response was: {llm_response}")
         else:
             logger.error(f"Ollama API error: {response.status_code}")
             logger.error(f"Response content: {response.text}")
             
+        # Return empty structure on any error
+        return {
+            'nome_participante': None,
+            'evento': None,
+            'local': None,
+            'data': None,
+            'carga_horaria': None
+        }
+            
     except Exception as e:
         logger.error(f"Error calling Ollama: {e}")
+        return {
+            'nome_participante': None,
+            'evento': None,
+            'local': None,
+            'data': None,
+            'carga_horaria': None
+        }
 
 
 def extract_certificate_info(text: str) -> Dict[str, any]:
     """Extract certificate information from text using LLM."""
     try:
-        # Preprocess text
-        cleaned_text = preprocess_text(text)
-        
-        # Use LLM-based extraction
-        extracted_fields = extract_fields_with_llm(cleaned_text)
+        # Use LLM-based extraction with built-in text cleaning
+        extracted_fields = extract_fields_with_llm(text)
         
         # Format the response to match the expected API structure
         results = {}
