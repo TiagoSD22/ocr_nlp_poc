@@ -1,99 +1,232 @@
-# Certificate OCR Extraction API
+# Certificate Document Processing API
 
-Uma aplicação Flask para extração automática de informações de certificados usando OCR (Tesseract) e análise semântica com sentence-transformers.
+A Flask-based REST API that processes certificate documents using OCR (Optical Character Recognition) and LLM (Large Language Model) analysis to extract structured information.
 
-## Funcionalidades
+## 🎯 What It Does
 
-- **OCR Avançado**: Extração de texto de documentos PDF, PNG, JPEG e outros formatos
-- **Análise Semântica**: Identificação inteligente de campos específicos usando vetorização semântica
-- **API REST**: Endpoint simples para upload e processamento de documentos
-- **Suporte Multi-formato**: Conversão automática de PDF para imagem
-- **Containerização**: Dockerfile incluído para deploy fácil
+The application processes certificate documents (PDF, PNG, JPEG, etc.) through a complete pipeline:
 
-## Campos Extraídos
+1. **OCR Text Extraction** - Uses Tesseract to extract raw text from documents
+2. **Text Preprocessing** - Cleans and enhances OCR output 
+3. **LLM Analysis** - Uses Ollama with local language models for intelligent field extraction
+4. **Structured Output** - Returns organized JSON data with extracted fields
 
-A aplicação identifica automaticamente os seguintes campos em certificados:
+**Extracted Fields:**
+- `nome_participante` - Participant's full name
+- `evento` - Event/course name
+- `local` - Location/institution
+- `data` - Event date
+- `carga_horaria` - Duration/workload hours
 
-- **Nome do Participante**: Nome completo da pessoa certificada
-- **Evento**: Nome do curso, workshop, seminário ou treinamento
-- **Local**: Cidade, endereço ou localização do evento
-- **Data**: Data de realização ou período do evento
-- **Carga Horária**: Duração total em horas
+## 🏗️ Architecture
 
-## Tecnologias Utilizadas
+- **Framework**: Flask with dependency injection (Flask-Injector)
+- **OCR Engine**: Tesseract with Portuguese + English support
+- **LLM Integration**: Ollama for local language model processing
+- **Deployment**: Docker Compose with multi-container setup
+- **API Design**: RESTful with versioned endpoints (`/api/v1/`)
 
-- **Flask**: Framework web Python
-- **Tesseract OCR**: Engine de reconhecimento óptico de caracteres
-- **Sentence Transformers**: Modelo de IA para análise semântica
-- **PIL/Pillow**: Processamento de imagens
-- **pdf2image**: Conversão de PDF para imagem
-- **scikit-learn**: Cálculo de similaridade coseno
+## 🚀 Quick Start
 
-## Instalação e Uso
+### Prerequisites
+- Docker and Docker Compose
+- 8GB+ RAM (for LLM models)
 
-### Usando Docker (Recomendado)
-
+### 1. Clone and Setup
 ```bash
-# Build da imagem
-docker build -t certificate-ocr .
-
-# Executar container
-docker run -p 5000:5000 certificate-ocr
+git clone <repository-url>
+cd ocr
 ```
 
-### Instalação Local
-
-1. Instalar dependências do sistema:
+### 2. Configure Model (Optional)
 ```bash
-# Ubuntu/Debian
-sudo apt-get update
-sudo apt-get install tesseract-ocr tesseract-ocr-por tesseract-ocr-eng poppler-utils
+# Edit .env file to choose your preferred model
+echo "OLLAMA_MODEL=llama3.2:1b" > .env
 
-# macOS (com Homebrew)
-brew install tesseract poppler
+# Available models:
+# - llama3.2:1b  (~1.3GB, fastest)
+# - phi3:mini    (~2.3GB, good accuracy)
+# - llama3.2:3b  (~2.0GB, balanced)
 ```
 
-2. Instalar dependências Python:
+### 3. Start Services
 ```bash
-pip install -r requirements.txt
+# Start all services (Flask + Ollama)
+docker-compose up -d
+
+# Monitor model download (first run only)
+docker-compose logs -f ollama
 ```
 
-3. Executar aplicação:
+### 4. Test the API
 ```bash
-python app.py
+# Health check
+curl http://localhost:5000/api/v1/health
+
+# Process a certificate
+curl -X POST \
+  -F "file=@certificate.pdf" \
+  http://localhost:5000/api/v1/certificate/process
 ```
 
-## Uso da API
+## 📚 API Reference
 
 ### Health Check
-
-```bash
-GET /health
+```http
+GET /api/v1/health
 ```
 
-### Extração de Certificado
+**Response:**
+```json
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "api_version": "v1",
+  "ollama_available": true,
+  "ollama_model": "llama3.2:1b",
+  "model_downloaded": true,
+  "tesseract_available": true
+}
+```
 
-```bash
-POST /extract-certificate
+### Process Certificate Document
+```http
+POST /api/v1/certificate/process
 Content-Type: multipart/form-data
 ```
 
-**Parâmetros:**
-- `file`: Arquivo do certificado (PDF, PNG, JPEG, etc.)
+**Parameters:**
+- `file` - Certificate file (PDF, PNG, JPEG, TIFF, BMP)
 
-**Exemplo usando curl:**
-```bash
-curl -X POST -F "file=@certificado.pdf" http://localhost:5000/extract-certificate
+**Success Response:**
+```json
+{
+  "success": true,
+  "filename": "certificate.pdf",
+  "extracted_fields": {
+    "nome_participante": "João Silva",
+    "evento": "Python Advanced Course",
+    "local": "São Paulo, SP",
+    "data": "March 15, 2024",
+    "carga_horaria": "40 hours"
+  },
+  "raw_text": "Complete extracted text...",
+  "text_length": 1250
+}
 ```
 
-## Configuração
+## 🔧 Development
 
-### Limites
+### Local Development (Without Docker)
 
-- **Tamanho máximo do arquivo**: 16MB
-- **Formatos suportados**: PDF, PNG, JPG, JPEG, TIFF, BMP
-- **Timeout**: 120 segundos para processamento
+1. **Install Ollama**
+   ```bash
+   # Download from https://ollama.ai/
+   # Pull a model
+   ollama pull llama3.2:1b
+   ollama serve
+   ```
 
-## Licença
+2. **Setup Python Environment**
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # Linux/Mac
+   # .venv\Scripts\activate   # Windows
+   
+   pip install -r requirements.txt
+   ```
 
-Este projeto está sob a licença MIT.
+3. **Install System Dependencies**
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get install tesseract-ocr tesseract-ocr-por poppler-utils
+   
+   # macOS
+   brew install tesseract tesseract-lang poppler
+   ```
+
+4. **Run Application**
+   ```bash
+   python main.py
+   ```
+
+### Project Structure
+```
+├── main.py                 # Application entry point
+├── config/
+│   ├── settings.py        # Configuration variables
+│   ├── injection.py       # Dependency injection setup
+│   └── prompts.py         # LLM prompt templates
+├── services/
+│   ├── ocr_service.py     # OCR text extraction
+│   ├── llm_service.py     # Ollama LLM integration
+│   ├── certificate_service.py  # Certificate processing logic
+│   └── prompt_service.py  # Prompt template management
+├── routes/
+│   ├── health.py          # Health check endpoints
+│   └── certificate.py     # Certificate processing endpoints
+├── docker-compose.yml     # Multi-container setup
+├── Dockerfile             # Flask application container
+└── requirements.txt       # Python dependencies
+```
+
+## 🐳 Docker Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐
+│   Flask App     │◄──►│     Ollama      │
+│   (port 5000)   │    │   (port 11434)  │
+│                 │    │                 │
+│ OCR + API       │    │ LLM Processing  │
+│ Certificate     │    │ Model Storage   │
+│ Processing      │    │                 │
+└─────────────────┘    └─────────────────┘
+         │                        │
+         └──────── Internal Network ────────┘
+```
+
+**Containers:**
+- `ocr-flask-app` - Flask API with Tesseract OCR
+- `ocr-ollama` - Ollama LLM server with model storage
+
+## 🛠️ Technology Stack
+
+- **Backend**: Python 3.11 + Flask
+- **Dependency Injection**: Flask-Injector
+- **OCR**: Tesseract with image preprocessing (PIL/Pillow)
+- **PDF Processing**: pdf2image + poppler-utils
+- **LLM**: Ollama (local inference)
+- **Containerization**: Docker + Docker Compose
+- **HTTP Client**: requests library
+- **Logging**: Python logging module
+
+## 📝 Configuration
+
+Environment variables (optional):
+```bash
+# Ollama settings
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2:1b
+OLLAMA_TIMEOUT=90
+OLLAMA_CONNECTION_TIMEOUT=5
+
+# Flask settings  
+DEBUG=false
+HOST=0.0.0.0
+PORT=5000
+
+# Image processing
+CONTRAST_FACTOR=1.5
+SHARPNESS_FACTOR=2.0
+```
+
+## 🧪 Testing
+
+Use the included Bruno API collection in `API/OCR Service/` for testing endpoints, or use curl/Postman with the examples above.
+
+## 📋 Requirements
+
+- **RAM**: 8GB+ (for LLM models)
+- **Storage**: 5GB+ (for models and dependencies)
+- **CPU**: Multi-core recommended for better performance
+- **OS**: Linux, macOS, or Windows with WSL2
