@@ -1,0 +1,27 @@
+meta {
+  name: LLM Generate
+  type: http
+  seq: 2
+}
+
+post {
+  url: http://localhost:11434/api/generate
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "model": "llama3.2:1b",
+    "prompt": "Give me a quote from Fiodor Dostoievski",
+    "options": {
+      "temperature": 0.1,
+      "top_p": 0.2
+    },
+    "stream": false
+  }
+}
+
+settings {
+  encodeUrl: true
+}
