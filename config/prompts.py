@@ -45,3 +45,37 @@ OCR Text:
 {text}
 
 JSON:"""
+
+# Activity categorization prompt template
+ACTIVITY_CATEGORIZATION_PROMPT = """You are an expert in classifying complementary activities for Computer Engineering students.
+
+TASK: Analyze the extracted certificate and identify the most appropriate category among the available options.
+
+COMPLETE CERTIFICATE TEXT (OCR):
+{raw_text}
+
+STRUCTURED EXTRACTED DATA:
+- Participant: {nome_participante}
+- Event: {evento}
+- Location: {local}
+- Date: {data}
+- Hours: {carga_horaria}
+
+AVAILABLE CATEGORIES:
+{categories_text}
+
+INSTRUCTIONS:
+1. FIRST analyze the complete certificate text (OCR) to fully understand the context
+2. Use the structured data as additional reference
+3. Carefully compare with all available categories
+4. Consider keywords, activity type, institution, knowledge area
+5. Choose the category that best fits the complete context
+6. Explain your decision clearly and in detail
+
+RESPONSE FORMAT (JSON):
+{{
+    "category_id": <ID of the chosen category>,
+    "reasoning": "<Detailed explanation of the choice, mentioning specific elements from the OCR text that led to this decision>The reasoning should be in Portuguese BR"
+}}
+
+Respond ONLY with valid JSON, no additional text."""
