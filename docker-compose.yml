@@ -5,8 +5,32 @@ networks:
 volumes:
   ollama-data:
     driver: local
+  postgres-data:
+    driver: local
 
 services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: ocr-postgres
+    environment:
+      POSTGRES_DB: complementa_db
+      POSTGRES_USER: complementa_user
+      POSTGRES_PASSWORD: complementa_pass
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - ocr-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U complementa_user -d complementa_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   ollama:
     image: ollama/ollama:latest
     container_name: ocr-ollama
@@ -35,14 +59,18 @@ services:
       - "5000:5000"
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=postgresql://complementa_user:complementa_pass@postgres:5432/complementa_db
     networks:
       - ocr-network
     depends_on:
+      postgres:
+        condition: service_healthy
       ollama:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
