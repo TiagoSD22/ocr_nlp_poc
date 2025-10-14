@@ -30,6 +30,7 @@ COPY main.py .
 COPY config/ ./config/
 COPY routes/ ./routes/
 COPY services/ ./services/
+COPY models/ ./models/
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
