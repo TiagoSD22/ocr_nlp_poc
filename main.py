@@ -8,6 +8,8 @@ from flask_injector import FlaskInjector
 from config.injection import ServiceModule
 from routes.health import health_bp
 from routes.certificate import certificate_bp
+from routes.activity import activity_bp
+from models import db
 import config.settings as settings
 
 # Configure logging
@@ -22,6 +24,21 @@ def create_app():
     # Configure Flask settings
     app.config['MAX_CONTENT_LENGTH'] = settings.MAX_CONTENT_LENGTH
     app.config['DEBUG'] = settings.DEBUG
+    
+    # Configure database
+    app.config['SQLALCHEMY_DATABASE_URI'] = settings.DATABASE_URL
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
+    # Initialize database
+    db.init_app(app)
+    
+    # Create database tables
+    with app.app_context():
+        try:
+            db.create_all()
+            logger.info("Database tables created successfully")
+        except Exception as e:
+            logger.error(f"Error creating database tables: {e}")
     
     # Register blueprints
     app.register_blueprint(health_bp)
