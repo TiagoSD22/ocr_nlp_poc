@@ -4,7 +4,7 @@ Prompt service for managing LLM prompt templates and formatting.
 from typing import Dict, Any
 import logging
 
-from config.prompts import CERTIFICATE_EXTRACTION_PROMPT
+from config.prompts import CERTIFICATE_EXTRACTION_PROMPT, ACTIVITY_CATEGORIZATION_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +16,7 @@ class PromptService:
         """Initialize prompt service."""
         self.prompts = {
             'certificate_extraction': CERTIFICATE_EXTRACTION_PROMPT,
-            # Future prompt types can be added here
-            # 'document_classification': DOCUMENT_CLASSIFICATION_PROMPT,
-            # 'document_summarization': DOCUMENT_SUMMARIZATION_PROMPT,
+            'activity_categorization': ACTIVITY_CATEGORIZATION_PROMPT
         }
     
     def get_prompt(self, prompt_type: str, **kwargs) -> str:
@@ -59,6 +57,42 @@ class PromptService:
             Formatted certificate extraction prompt
         """
         return self.get_prompt('certificate_extraction', text=text)
+    
+    def get_activity_categorization_prompt(
+        self, 
+        raw_text: str,
+        nome_participante: str,
+        evento: str,
+        local: str,
+        data: str,
+        carga_horaria: str,
+        categories_text: str
+    ) -> str:
+        """
+        Get formatted activity categorization prompt.
+        
+        Args:
+            raw_text: Complete OCR text
+            nome_participante: Participant name
+            evento: Event name
+            local: Location
+            data: Date
+            carga_horaria: Hours
+            categories_text: Formatted categories list
+            
+        Returns:
+            Formatted activity categorization prompt
+        """
+        return self.get_prompt(
+            'activity_categorization',
+            raw_text=raw_text,
+            nome_participante=nome_participante,
+            evento=evento,
+            local=local,
+            data=data,
+            carga_horaria=carga_horaria,
+            categories_text=categories_text
+        )
     
     def list_available_prompts(self) -> list:
         """List all available prompt types."""
