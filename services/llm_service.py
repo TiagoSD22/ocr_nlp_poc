@@ -199,6 +199,52 @@ class LLMService:
             logger.error(f"Error calling Ollama: {e}")
             return self._get_empty_fields()
     
+    def categorize_activity(self, prompt: str) -> str:
+        """
+        Categorize activity using Ollama LLM with a specific prompt.
+        
+        Args:
+            prompt: The categorization prompt to send to LLM
+            
+        Returns:
+            Raw LLM response string
+        """
+        try:
+            payload = {
+                "model": self.model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.1,  # Low temperature for consistent categorization
+                    "top_p": 0.9
+                }
+            }
+            
+            logger.info(f"Sending categorization request to Ollama with model: {self.model}")
+            
+            response = requests.post(
+                f"{self.base_url}/api/generate",
+                json=payload,
+                timeout=self.timeout
+            )
+            
+            logger.info(f"Ollama categorization response status: {response.status_code}")
+            
+            if response.status_code == 200:
+                result = response.json()
+                llm_response = result.get('response', '').strip()
+                
+                logger.info(f"LLM categorization raw response: {llm_response[:200]}...")
+                return llm_response
+            else:
+                logger.error(f"Ollama API error for categorization: {response.status_code}")
+                logger.error(f"Response content: {response.text}")
+                return ""
+                
+        except Exception as e:
+            logger.error(f"Error calling Ollama for categorization: {e}")
+            return ""
+    
     def _get_empty_fields(self) -> Dict[str, Any]:
         """Return empty fields structure."""
         return {
