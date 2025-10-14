@@ -71,15 +71,22 @@ def process_document(
         
         logger.info(f"Total extracted text: {len(extracted_text)} characters")
         
-        # Extract certificate information using certificate service
-        certificate_info = certificate_service.extract_certificate_info(extracted_text)
+        # Process certificate through complete pipeline (LLM + categorization)
+        processing_result = certificate_service.process_certificate(extracted_text, filename)
+        
+        if not processing_result['success']:
+            return jsonify({
+                'error': processing_result['error'],
+                'filename': filename
+            }), 400
         
         response = {
             "success": True,
             "filename": filename,
-            "extracted_fields": certificate_info,
-            "raw_text": extracted_text[:1000] + "..." if len(extracted_text) > 1000 else extracted_text,
-            "text_length": len(extracted_text)
+            "extracted_fields": processing_result['extracted_fields'],
+            "categorization": processing_result['categorization'],
+            "text_length": len(extracted_text),
+            "processing_pipeline": processing_result['processing_pipeline']
         }
         
         return jsonify(response)
