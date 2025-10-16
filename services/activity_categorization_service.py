@@ -5,7 +5,11 @@ import re
 import json
 import logging
 from typing import Dict, Any, List, Optional
-from models import ActivityCategory, ExtractedActivity, db
+from models.activity_category import ActivityCategory
+from models.extracted_activity import ExtractedActivity
+from repositories.extracted_activity_repository import ExtractedActivityRepository
+from repositories.activity_category_repository import ActivityCategoryRepository
+from database.connection import get_db_session
 from services.llm_service import LLMService
 from services.prompt_service import PromptService
 
@@ -15,17 +19,26 @@ logger = logging.getLogger(__name__)
 class ActivityCategorizationService:
     """Service for categorizing extracted activities using LLM and calculating valid hours."""
     
-    def __init__(self, llm_service: LLMService, prompt_service: PromptService):
-        """Initialize the service with LLM and prompt service dependencies."""
+    def __init__(
+        self, 
+        llm_service: LLMService, 
+        prompt_service: PromptService,
+        activity_repository: ExtractedActivityRepository,
+        category_repository: ActivityCategoryRepository
+    ):
+        """Initialize the service with LLM, prompt service and repository dependencies."""
         self.llm_service = llm_service
         self.prompt_service = prompt_service
+        self.activity_repository = activity_repository
+        self.category_repository = category_repository
     
-    def categorize_activity(self, extracted_data: Dict[str, Any]) -> Dict[str, Any]:
+    def categorize_activity(self, extracted_data: Dict[str, Any], submission_id: int = None) -> Dict[str, Any]:
         """
         Categorize an extracted activity using LLM and calculate valid hours.
         
         Args:
             extracted_data: Dictionary with extracted certificate data
+            submission_id: ID of the certificate submission (for database persistence)
             
         Returns:
             Dictionary with categorization results
@@ -42,32 +55,32 @@ class ActivityCategorizationService:
             return self._create_error_result("Could not extract numeric hours")
         
         # Use LLM to identify category
-        category, llm_reasoning = self._categorize_with_llm(extracted_data)
-        if not category:
+        category_data, llm_reasoning = self._categorize_with_llm(extracted_data)
+        if not category_data:
             return self._create_error_result("No matching category found by LLM")
         
         # Calculate valid hours based on category rules
-        calculated_hours = self._calculate_hours(category, numeric_hours, extracted_data)
+        calculated_hours = self._calculate_hours(category_data, numeric_hours, extracted_data)
         
         # Save to database
-        extracted_activity = self._save_extracted_activity(
-            extracted_data, category, numeric_hours, calculated_hours, llm_reasoning
+        extracted_activity_id = self._save_extracted_activity(
+            extracted_data, category_data, numeric_hours, calculated_hours, llm_reasoning, submission_id
         )
         
         return {
             'success': True,
-            'category_id': category.id,
-            'category_name': category.name,
+            'category_id': category_data['id'],
+            'category_name': category_data['name'],
             'original_hours': numeric_hours,
             'calculated_hours': calculated_hours,
-            'calculation_type': category.calculation_type,
-            'input_unit': category.input_unit,
-            'max_total_hours': category.max_total_hours,
+            'calculation_type': category_data['calculation_type'],
+            'input_unit': category_data['input_unit'],
+            'max_total_hours': category_data['max_total_hours'],
             'llm_reasoning': llm_reasoning,
-            'extracted_activity_id': extracted_activity.id
+            'extracted_activity_id': extracted_activity_id
         }
     
-    def _categorize_with_llm(self, extracted_data: Dict[str, Any]) -> tuple[Optional[ActivityCategory], str]:
+    def _categorize_with_llm(self, extracted_data: Dict[str, Any]) -> tuple[Optional[Dict[str, Any]], str]:
         """
         Use LLM to categorize the activity.
         
@@ -75,25 +88,33 @@ class ActivityCategorizationService:
             extracted_data: Extracted certificate data
             
         Returns:
-            Tuple of (category, reasoning)
+            Tuple of (category_data_dict, reasoning)
         """
-        # Get all available categories
-        categories = ActivityCategory.query.all()
-        
-        # Build categorization prompt
-        prompt = self._build_categorization_prompt(extracted_data, categories)
-        
         try:
-            # Get LLM response
-            response = self.llm_service.categorize_activity(prompt)
+            # Get all available categories (both formatted text and category data dict)
+            categories_text, categories_dict = self._get_categories_text()
+            
+            # Get raw OCR text
+            raw_text = extracted_data.get('raw_text', '')
+            
+            # Get LLM response using proper prompt service
+            response = self.llm_service.categorize_activity(
+                raw_text=raw_text,
+                extracted_data=extracted_data,
+                categories_text=categories_text
+            )
             logger.info(f"LLM categorization response: {response}")
             
             # Parse response to extract category ID and reasoning
-            category_id, reasoning = self._parse_llm_response(response)
+            category_id = response.get('category_id')
+            reasoning = response.get('reasoning', 'No reasoning provided')
             
-            if category_id:
-                category = ActivityCategory.query.get(category_id)
-                return category, reasoning
+            if category_id and category_id in categories_dict:
+                # Return pre-loaded category data from the dictionary
+                category_data = categories_dict[category_id]
+                return category_data, reasoning
+            elif category_id:
+                return None, f"Category ID {category_id} not found"
             
             return None, reasoning
             
@@ -150,55 +171,57 @@ class ActivityCategorizationService:
             logger.error(f"JSON parsing error: {e}")
             return None, f"JSON parsing error: {response}"
     
-    def _calculate_hours(self, category: ActivityCategory, numeric_hours: int, extracted_data: Dict[str, Any]) -> int:
+    def _calculate_hours(self, category_data: Dict[str, Any], numeric_hours: int, extracted_data: Dict[str, Any]) -> int:
         """
         Calculate valid hours based on category calculation rules.
         
         Args:
-            category: Activity category with calculation rules
+            category_data: Category data dictionary with calculation rules
             numeric_hours: Original hours from certificate
             extracted_data: Additional extracted data for calculation
             
         Returns:
             Calculated valid hours
         """
-        if category.calculation_type == 'fixed_per_semester':
+        calculation_type = category_data['calculation_type']
+        
+        if calculation_type == 'fixed_per_semester':
             # Fixed hours per semester
-            return category.hours_awarded
+            return category_data['hours_awarded']
         
-        elif category.calculation_type == 'fixed_per_activity':
+        elif calculation_type == 'fixed_per_activity':
             # Fixed hours per activity/event
-            return category.hours_awarded
+            return category_data['hours_awarded']
         
-        elif category.calculation_type == 'ratio_hours':
+        elif calculation_type == 'ratio_hours':
             # Hours-based ratio calculation
-            ratio = category.output_hours / category.input_quantity
+            ratio = category_data['output_hours'] / category_data['input_quantity']
             calculated = int(numeric_hours * ratio)
-            return min(calculated, category.max_total_hours)
+            return min(calculated, category_data['max_total_hours'])
         
-        elif category.calculation_type == 'ratio_days':
+        elif calculation_type == 'ratio_days':
             # Days-based calculation - need to extract days from data
             days = self._extract_days_from_data(extracted_data)
             if days:
-                calculated = days * category.output_hours
-                return min(calculated, category.max_total_hours)
+                calculated = days * category_data['output_hours']
+                return min(calculated, category_data['max_total_hours'])
             else:
                 # Fallback: assume 1 day
-                return min(category.output_hours, category.max_total_hours)
+                return min(category_data['output_hours'], category_data['max_total_hours'])
         
-        elif category.calculation_type == 'ratio_pages':
+        elif calculation_type == 'ratio_pages':
             # Pages-based calculation - need to extract pages from data
             pages = self._extract_pages_from_data(extracted_data)
             if pages:
-                ratio = category.output_hours / category.input_quantity
+                ratio = category_data['output_hours'] / category_data['input_quantity']
                 calculated = int(pages * ratio)
-                return min(calculated, category.max_total_hours)
+                return min(calculated, category_data['max_total_hours'])
             else:
                 # Fallback: assume minimum pages
-                return min(category.output_hours, category.max_total_hours)
+                return min(category_data['output_hours'], category_data['max_total_hours'])
         
         else:
-            logger.warning(f"Unknown calculation type: {category.calculation_type}")
+            logger.warning(f"Unknown calculation type: {calculation_type}")
             return 0
     
     def _extract_days_from_data(self, extracted_data: Dict[str, Any]) -> Optional[int]:
@@ -286,44 +309,49 @@ class ActivityCategorizationService:
     def _save_extracted_activity(
         self, 
         extracted_data: Dict[str, Any], 
-        category: ActivityCategory,
+        category_data: Dict[str, Any],
         numeric_hours: int,
         calculated_hours: int,
-        llm_reasoning: str
-    ) -> ExtractedActivity:
+        llm_reasoning: str,
+        submission_id: int = None
+    ) -> int:
         """
-        Save extracted activity to database.
+        Save extracted activity to database using repository pattern.
         
         Args:
             extracted_data: Original extracted data
-            category: Matched category
+            category_data: Category data dictionary
             numeric_hours: Extracted numeric hours
             calculated_hours: Calculated valid hours
             llm_reasoning: LLM's reasoning for category selection
+            submission_id: ID of the certificate submission
             
         Returns:
-            Saved ExtractedActivity instance
+            ID of the saved ExtractedActivity instance
         """
-        activity = ExtractedActivity(
-            filename=extracted_data.get('filename'),
-            nome_participante=extracted_data.get('nome_participante'),
-            evento=extracted_data.get('evento'),
-            local=extracted_data.get('local'),
-            data=extracted_data.get('data'),
-            carga_horaria_original=extracted_data.get('carga_horaria'),
-            carga_horaria_numeric=numeric_hours,
-            category_id=category.id,
-            calculated_hours=calculated_hours,
-            llm_reasoning=llm_reasoning[:2000],  # Truncate if too long
-            raw_text=extracted_data.get('raw_text', '')[:5000]  # Truncate if too long
-        )
-        
-        db.session.add(activity)
-        db.session.commit()
-        
-        logger.info(f"Saved activity: {activity.evento} -> {category.name} ({calculated_hours}h)")
-        
-        return activity
+        with get_db_session() as session:
+            activity = self.activity_repository.create_activity(
+                session=session,
+                submission_id=submission_id,
+                participant_name=extracted_data.get('nome_participante'),
+                event_name=extracted_data.get('evento'),
+                location=extracted_data.get('local'),
+                event_date=extracted_data.get('data'),
+                original_hours=extracted_data.get('carga_horaria'),
+                numeric_hours=numeric_hours,
+                category_id=category_data['id'],
+                calculated_hours=calculated_hours,
+                llm_reasoning=llm_reasoning if llm_reasoning else None,
+                raw_text=extracted_data.get('raw_text', '') if extracted_data.get('raw_text') else None,
+                review_status='pending_review'
+            )
+            
+            # Extract the ID while the session is still active
+            activity_id = activity.id
+            
+            logger.info(f"Saved activity: {extracted_data.get('evento')} -> {category_data['name']} ({calculated_hours}h)")
+            
+            return activity_id
     
     def _create_error_result(self, error_message: str) -> Dict[str, Any]:
         """
@@ -408,3 +436,22 @@ class ActivityCategorizationService:
             }
             for act in activities
         ]
+    
+    def _get_categories_text(self) -> tuple[str, Dict[int, Dict[str, Any]]]:
+        """
+        Get formatted text of available activity categories and return category data.
+        
+        Returns:
+            Tuple of (formatted_categories_text, categories_data_dict)
+        """
+        try:
+            with get_db_session() as session:
+                # Use repository to get formatted text and data dict
+                categories_text = self.category_repository.get_categories_formatted_text(session)
+                categories_dict = self.category_repository.get_categories_dict(session)
+                
+                return categories_text, categories_dict
+                
+        except Exception as e:
+            logger.error(f"Error getting categories: {e}")
+            return "Error retrieving categories", {}
