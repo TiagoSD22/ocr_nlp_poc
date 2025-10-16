@@ -13,6 +13,19 @@ logger = logging.getLogger(__name__)
 
 
 class OCRService:
+    def extract_text(self, submission):
+        """Download file from S3 and extract text for the given submission."""
+        # TODO: Implement S3 download and OCR extraction logic
+        # Example:
+        # file_bytes = S3Service().download_file(submission.s3_key)
+        # text = self.process_file(file_bytes, submission.original_filename.split('.')[-1])
+        # return text
+        pass
+
+    def extract_metadata(self, submission):
+        """Extract metadata from the given submission's file."""
+        # TODO: Implement metadata extraction logic
+        pass
     """Service for handling OCR operations."""
     
     def __init__(self):
