@@ -16,26 +16,111 @@ CREATE TABLE activity_categories (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create students table
+CREATE TABLE students (
+    id SERIAL PRIMARY KEY,
+    enrollment_number VARCHAR(50) UNIQUE NOT NULL,
+    name VARCHAR(500) NOT NULL,
+    email VARCHAR(255),
+    total_approved_hours INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create certificate submissions table for async processing
+CREATE TABLE certificate_submissions (
+    id SERIAL PRIMARY KEY,
+    student_id INTEGER REFERENCES students(id),
+    original_filename VARCHAR(500),
+    s3_key VARCHAR(1000) NOT NULL, -- S3 object key
+    file_checksum VARCHAR(64) UNIQUE NOT NULL, -- SHA-256 hash
+    file_size BIGINT,
+    mime_type VARCHAR(100),
+    status VARCHAR(50) DEFAULT 'uploaded', -- 'uploaded', 'queued', 'ocr_processing', 'ocr_completed', 'metadata_extracting', 'metadata_extracted', 'categorizing', 'categorized', 'completed', 'failed'
+    error_message VARCHAR(1000),
+    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processing_started_at TIMESTAMP,
+    processing_completed_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create OCR texts table for audit
+CREATE TABLE certificate_ocr_texts (
+    id SERIAL PRIMARY KEY,
+    submission_id INTEGER REFERENCES certificate_submissions(id),
+    raw_text TEXT NOT NULL,
+    ocr_confidence DECIMAL(5,2), -- OCR confidence score
+    processing_time_ms INTEGER,
+    extracted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create certificate metadata table for extracted information
+CREATE TABLE certificate_metadata (
+    id SERIAL PRIMARY KEY,
+    submission_id INTEGER REFERENCES certificate_submissions(id),
+    participant_name VARCHAR(500),
+    event_name VARCHAR(1000),
+    location VARCHAR(500),
+    event_date VARCHAR(200),
+    original_hours VARCHAR(100),
+    numeric_hours INTEGER,
+    extraction_method VARCHAR(50) DEFAULT 'llm', -- 'llm', 'manual'
+    extraction_confidence DECIMAL(5,2),
+    processing_time_ms INTEGER,
+    extracted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create extracted activities table to store processing results
 CREATE TABLE extracted_activities (
     id SERIAL PRIMARY KEY,
+    submission_id INTEGER REFERENCES certificate_submissions(id),
+    metadata_id INTEGER REFERENCES certificate_metadata(id),
+    student_id INTEGER REFERENCES students(id),
+    enrollment_number VARCHAR(50),
     filename VARCHAR(500),
-    nome_participante VARCHAR(500),
-    evento VARCHAR(1000),
-    local VARCHAR(500),
-    data VARCHAR(200),
-    carga_horaria_original VARCHAR(100),
-    carga_horaria_numeric INTEGER,
+    participant_name VARCHAR(500),
+    event_name VARCHAR(1000),
+    location VARCHAR(500),
+    event_date VARCHAR(200),
+    original_hours VARCHAR(100),
+    numeric_hours INTEGER,
     category_id INTEGER REFERENCES activity_categories(id),
     calculated_hours INTEGER,
     llm_reasoning TEXT, -- Store LLM's reasoning for category selection
     raw_text TEXT,
-    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    
+    -- Review workflow fields
+    review_status VARCHAR(50) DEFAULT 'pending_review', -- 'pending_review', 'approved', 'rejected', 'manual_override'
+    coordinator_id VARCHAR(100), -- ID of coordinator who reviewed
+    coordinator_comments TEXT,
+    reviewed_at TIMESTAMP,
+    
+    -- Manual override fields (when coordinator disagrees with LLM)
+    override_category_id INTEGER REFERENCES activity_categories(id),
+    override_hours INTEGER,
+    override_reasoning TEXT,
+    
+    -- Final approved values (either LLM or override)
+    final_category_id INTEGER REFERENCES activity_categories(id),
+    final_hours INTEGER,
+    
+    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
 -- Create indexes for better performance
 CREATE INDEX idx_extracted_activities_category ON extracted_activities(category_id);
 CREATE INDEX idx_extracted_activities_processed_at ON extracted_activities(processed_at);
+CREATE INDEX idx_extracted_activities_review_status ON extracted_activities(review_status);
+CREATE INDEX idx_extracted_activities_student ON extracted_activities(student_id);
+CREATE INDEX idx_extracted_activities_submission ON extracted_activities(submission_id);
+CREATE INDEX idx_certificate_submissions_checksum ON certificate_submissions(file_checksum);
+CREATE INDEX idx_certificate_submissions_status ON certificate_submissions(status);
+CREATE INDEX idx_certificate_submissions_student ON certificate_submissions(student_id);
+CREATE INDEX idx_students_enrollment ON students(enrollment_number);
+CREATE INDEX idx_certificate_ocr_texts_submission ON certificate_ocr_texts(submission_id);
+CREATE INDEX idx_certificate_metadata_submission ON certificate_metadata(submission_id);
 
 -- Seed data with correct activity categories
 INSERT INTO activity_categories (name, description, calculation_type, hours_awarded, input_unit, input_quantity, output_hours, max_total_hours) VALUES
