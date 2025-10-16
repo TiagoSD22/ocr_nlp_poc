@@ -199,17 +199,40 @@ class LLMService:
             logger.error(f"Error calling Ollama: {e}")
             return self._get_empty_fields()
     
-    def categorize_activity(self, prompt: str) -> str:
+    def categorize_activity(
+        self, 
+        raw_text: str,
+        extracted_data: Dict[str, Any],
+        categories_text: str
+    ) -> Dict[str, Any]:
         """
-        Categorize activity using Ollama LLM with a specific prompt.
+        Categorize activity using Ollama LLM with structured data.
         
         Args:
-            prompt: The categorization prompt to send to LLM
+            raw_text: Complete OCR text from certificate
+            extracted_data: Dictionary with extracted fields (nome_participante, evento, etc.)
+            categories_text: Formatted string with available categories
             
         Returns:
-            Raw LLM response string
+            Dictionary with categorization results: {
+                'category_id': int,
+                'calculated_hours': int,
+                'confidence': float,
+                'reasoning': str
+            }
         """
         try:
+            # Build proper categorization prompt using PromptService
+            prompt = self.prompt_service.get_activity_categorization_prompt(
+                raw_text=raw_text,
+                nome_participante=extracted_data.get('nome_participante', ''),
+                evento=extracted_data.get('evento', ''),
+                local=extracted_data.get('local', ''),
+                data=extracted_data.get('data', ''),
+                carga_horaria=extracted_data.get('carga_horaria', ''),
+                categories_text=categories_text
+            )
+            
             payload = {
                 "model": self.model,
                 "prompt": prompt,
@@ -235,15 +258,56 @@ class LLMService:
                 llm_response = result.get('response', '').strip()
                 
                 logger.info(f"LLM categorization raw response: {llm_response[:200]}...")
-                return llm_response
+                
+                # Parse the categorization response
+                return self._parse_categorization_response(llm_response)
             else:
                 logger.error(f"Ollama API error for categorization: {response.status_code}")
                 logger.error(f"Response content: {response.text}")
-                return ""
+                return self._get_empty_categorization()
                 
         except Exception as e:
             logger.error(f"Error calling Ollama for categorization: {e}")
-            return ""
+            return self._get_empty_categorization()
+    
+    def _parse_categorization_response(self, llm_response: str) -> Dict[str, Any]:
+        """Parse categorization response from LLM."""
+        # Try to parse JSON response first
+        try:
+            if '{' in llm_response and '}' in llm_response:
+                start = llm_response.find('{')
+                end = llm_response.rfind('}') + 1
+                json_str = llm_response[start:end]
+                
+                categorization_data = json.loads(json_str)
+                
+                # Ensure required fields exist with defaults
+                return {
+                    'category_id': categorization_data.get('category_id'),
+                    'calculated_hours': categorization_data.get('calculated_hours'),
+                    'confidence': categorization_data.get('confidence'),
+                    'reasoning': categorization_data.get('reasoning', llm_response)
+                }
+        except (json.JSONDecodeError, ValueError):
+            pass
+        
+        # Fallback: try to extract information from text
+        logger.info("No JSON found in categorization response, using fallback parsing")
+        return {
+            'category_id': None,
+            'calculated_hours': None,
+            'confidence': None,
+            'reasoning': llm_response
+        }
+    
+    def _get_empty_categorization(self) -> Dict[str, Any]:
+        """Return empty categorization structure."""
+        return {
+            'category_id': None,
+            'calculated_hours': None,
+            'confidence': None,
+            'reasoning': None
+        }
     
     def _get_empty_fields(self) -> Dict[str, Any]:
         """Return empty fields structure."""
