@@ -1,5 +1,5 @@
 meta {
-  name: LLM Generate
+  name: LLM Generate (Ollama Direct)
   type: http
   seq: 2
 }
@@ -12,7 +12,7 @@ post {
 
 body:json {
   {
-    "model": "llama3.2:1b",
+    "model": "llama3.2:3b",
     "prompt": "Give me a quote from Fiodor Dostoievski",
     "options": {
       "temperature": 0.1,
@@ -24,4 +24,9 @@ body:json {
 
 settings {
   encodeUrl: true
+}
+
+docs {
+  Direct access to Ollama LLM API for testing.
+  Updated to use llama3.2:3b model (current default).
 }

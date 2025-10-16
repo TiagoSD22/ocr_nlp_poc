@@ -1,0 +1,37 @@
+meta {
+  name: Register Student
+  type: http
+  seq: 11
+}
+
+post {
+  url: http://localhost:5000/api/v1/student/register
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "enrollment_number": "20161015020263",
+    "name": "João Silva Santos",
+    "email": "joao.silva@universidade.edu.br"
+  }
+}
+
+settings {
+  encodeUrl: true
+}
+
+docs {
+  Register a new student in the system.
+  
+  Required fields:
+  - enrollment_number: Unique student enrollment number
+  - name: Student full name
+  
+  Optional fields:
+  - email: Student email address
+  
+  Note: Students must be registered before submitting certificates.
+  Returns 409 if enrollment number already exists.
+}

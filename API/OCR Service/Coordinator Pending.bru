@@ -1,0 +1,26 @@
+meta {
+  name: Get Pending Reviews
+  type: http
+  seq: 7
+}
+
+get {
+  url: http://localhost:5000/api/v1/coordinator/pending
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}
+
+docs {
+  Get all certificate submissions pending coordinator review.
+  
+  Returns detailed information about each submission including:
+  - Student information
+  - OCR extracted text
+  - LLM processed metadata
+  - Categorized activities
+  - Processing pipeline results
+}

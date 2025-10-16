@@ -1,0 +1,48 @@
+meta {
+  name: Approve Submission
+  type: http
+  seq: 9
+}
+
+post {
+  url: http://localhost:5000/api/v1/coordinator/approve/1
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "coordinator_id": "coordinator123",
+    "comments": "Certificate validated and approved for academic credit.",
+    "override_data": {
+      "final_course_name": "Python Programming Workshop",
+      "final_institution": "Tech Institute",
+      "final_hours": 40
+    },
+    "activities": [
+      {
+        "activity_id": 1,
+        "approved": true,
+        "override_category_id": 3,
+        "override_hours": 40,
+        "reasoning": "Approved with corrected category and hours"
+      }
+    ]
+  }
+}
+
+settings {
+  encodeUrl: true
+}
+
+docs {
+  Approve a certificate submission with optional overrides.
+  
+  Replace '1' in URL with actual submission_id.
+  
+  Fields:
+  - coordinator_id: ID of reviewing coordinator
+  - comments: Review comments
+  - override_data: Optional metadata corrections
+  - activities: Array of activity approvals/overrides
+}

@@ -1,0 +1,30 @@
+meta {
+  name: Submit Certificate (Async)
+  type: http
+  seq: 4
+}
+
+post {
+  url: http://localhost:5000/api/v1/certificate/submit
+  body: multipartForm
+  auth: inherit
+}
+
+body:multipart-form {
+  file: @file(C:\Users\dante\Downloads\certificado_exemplo.pdf)
+  enrollment_number: 20241234567
+}
+
+settings {
+  encodeUrl: true
+}
+
+docs {
+  Async certificate submission endpoint.
+  Uploads file to S3 and starts async processing pipeline.
+  Returns submission_id for tracking progress.
+  
+  Required fields:
+  - file: PDF, PNG, JPG, JPEG, TIFF, BMP
+  - enrollment_number: Student enrollment number
+}

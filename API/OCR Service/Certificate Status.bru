@@ -1,0 +1,27 @@
+meta {
+  name: Check Submission Status
+  type: http
+  seq: 5
+}
+
+get {
+  url: http://localhost:5000/api/v1/certificate/status/1
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}
+
+docs {
+  Check the processing status of a certificate submission.
+  
+  Replace '1' in URL with actual submission_id from submit response.
+  
+  Status values:
+  - submitted: Initial upload complete
+  - processing: In async processing pipeline
+  - processed: Processing complete
+  - failed: Processing failed
+}

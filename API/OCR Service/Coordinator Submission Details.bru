@@ -1,0 +1,29 @@
+meta {
+  name: Get Submission Details
+  type: http
+  seq: 8
+}
+
+get {
+  url: http://localhost:5000/api/v1/coordinator/submission/1
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}
+
+docs {
+  Get detailed information about a specific submission for review.
+  
+  Replace '1' in URL with actual submission_id.
+  
+  Returns complete submission details including:
+  - Student information
+  - Original file metadata
+  - OCR extracted text
+  - LLM processed metadata
+  - Activity categorization results
+  - All processing stages
+}

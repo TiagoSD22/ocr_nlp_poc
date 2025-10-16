@@ -1,0 +1,34 @@
+meta {
+  name: Reject Submission
+  type: http
+  seq: 10
+}
+
+post {
+  url: http://localhost:5000/api/v1/coordinator/reject/1
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "coordinator_id": "coordinator123",
+    "comments": "Certificate does not meet institutional requirements. Please submit a valid certificate with clear course information and completion date.",
+    "rejection_reason": "invalid_certificate"
+  }
+}
+
+settings {
+  encodeUrl: true
+}
+
+docs {
+  Reject a certificate submission.
+  
+  Replace '1' in URL with actual submission_id.
+  
+  Fields:
+  - coordinator_id: ID of reviewing coordinator
+  - comments: Detailed rejection reason
+  - rejection_reason: Category of rejection (invalid_certificate, insufficient_hours, etc.)
+}

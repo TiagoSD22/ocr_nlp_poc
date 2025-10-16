@@ -9,3 +9,18 @@ get {
   body: none
   auth: inherit
 }
+
+settings {
+  encodeUrl: true
+}
+
+docs {
+  Service health check endpoint.
+  
+  Returns status of all system components:
+  - Overall service health
+  - Ollama LLM availability 
+  - Model download status
+  - Tesseract OCR availability
+  - API version information
+}

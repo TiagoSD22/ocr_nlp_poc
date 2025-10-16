@@ -1,0 +1,39 @@
+meta {
+  name: Update Student Info
+  type: http
+  seq: 13
+}
+
+put {
+  url: http://localhost:5000/api/v1/student/20161015020263
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "John Smith Updated",
+    "email": "john.smith.updated@example.com"
+  }
+}
+
+settings {
+  encodeUrl: true
+}
+
+docs {
+  Update student information by enrollment number.
+  
+  Replace '20161015020263' in URL with actual enrollment number.
+  
+  Request Body:
+  - name: Updated student name (optional)
+  - email: Updated email address (optional)
+  
+  Returns:
+  - Updated student details
+  - Success message
+  
+  Returns 404 if student not found.
+  Returns 400 if validation fails.
+}

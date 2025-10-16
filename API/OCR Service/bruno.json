@@ -1,9 +1,19 @@
 {
   "version": "1",
-  "name": "OCR Service",
+  "name": "OCR Certificate Processing Service",
   "type": "collection",
   "ignore": [
     "node_modules",
     ".git"
-  ]
+  ],
+  "description": "Complete API collection for the OCR Certificate Processing Service with async Kafka pipeline and coordinator review workflow.",
+  "environments": {
+    "local": {
+      "name": "Local Development",
+      "variables": {
+        "baseUrl": "http://localhost:5000",
+        "ollamaUrl": "http://localhost:11434"
+      }
+    }
+  }
 }

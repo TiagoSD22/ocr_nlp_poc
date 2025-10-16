@@ -1,0 +1,28 @@
+meta {
+  name: Get Student Info
+  type: http
+  seq: 12
+}
+
+get {
+  url: http://localhost:5000/api/v1/student/20161015020263
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}
+
+docs {
+  Get student information by enrollment number.
+  
+  Replace '20161015020263' in URL with actual enrollment number.
+  
+  Returns:
+  - Student details (id, name, email, enrollment_number)
+  - Total approved hours
+  - Creation and update timestamps
+  
+  Returns 404 if student not found.
+}
