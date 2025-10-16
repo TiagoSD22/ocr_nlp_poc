@@ -7,8 +7,70 @@ volumes:
     driver: local
   postgres-data:
     driver: local
+  localstack-data:
+    driver: local
 
 services:
+  # LocalStack for AWS services emulation
+  localstack:
+    image: localstack/localstack:latest
+    container_name: ocr-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3
+      - DEBUG=1
+      - PERSISTENCE=1
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    volumes:
+      - localstack-data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - ocr-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Kafka broker with KRaft (no Zookeeper needed)
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: ocr-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    networks:
+      - ocr-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bash", "-c", "unset JMX_PORT; kafka-topics --bootstrap-server localhost:9092 --list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
   postgres:
     image: postgres:15-alpine
     container_name: ocr-postgres
@@ -44,13 +106,21 @@ services:
       - .env
     environment:
       - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:3b}
     restart: unless-stopped
+    entrypoint: >
+      /bin/bash -c "
+        ollama serve &
+        sleep 10 &&
+        ollama pull $$OLLAMA_MODEL &&
+        wait
+      "
     healthcheck:
-      test: ["CMD", "ollama", "list"]
+      test: ["CMD-SHELL", "ollama list | grep -q '${OLLAMA_MODEL:-llama3.2:3b}' || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 5
-      start_period: 60s
+      retries: 10
+      start_period: 300s
 
   certificate-ocr:
     build: .
@@ -61,12 +131,22 @@ services:
       - .env
     environment:
       - DATABASE_URL=postgresql://complementa_user:complementa_pass@postgres:5432/complementa_db
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - S3_BUCKET_NAME=complementa-certificates
     networks:
       - ocr-network
     depends_on:
       postgres:
         condition: service_healthy
       ollama:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -75,3 +155,34 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # Kafka Consumers for processing pipeline
+  kafka-consumers:
+    build: .
+    container_name: ocr-kafka-consumers
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://complementa_user:complementa_pass@postgres:5432/complementa_db
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - S3_BUCKET_NAME=complementa-certificates
+    networks:
+      - ocr-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      certificate-ocr:
+        condition: service_healthy
+    restart: unless-stopped
+    command: ["python", "consumer_manager.py"]
