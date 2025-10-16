@@ -66,11 +66,11 @@ graph TD
 ```mermaid
 stateDiagram-v2
     [*] --> uploaded: File submitted
-    uploaded --> ingest_processing: Kafka: certificate.ingest
+    uploaded --> ingest_processing: Kafka certificate.ingest
     ingest_processing --> ocr_processing: OCR completed
-    ocr_processing --> metadata_processing: Kafka: certificate.ocr
+    ocr_processing --> metadata_processing: Kafka certificate.ocr
     metadata_processing --> categorization_processing: Metadata extracted
-    categorization_processing --> pending_review: Kafka: certificate.metadata
+    categorization_processing --> pending_review: Kafka certificate.metadata
     pending_review --> approved: Coordinator approves
     pending_review --> rejected: Coordinator rejects
     approved --> [*]
