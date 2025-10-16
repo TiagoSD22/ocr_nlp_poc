@@ -27,10 +27,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code and directory structure
 COPY main.py .
+COPY consumer_manager.py .
 COPY config/ ./config/
 COPY routes/ ./routes/
 COPY services/ ./services/
+COPY consumers/ ./consumers/
 COPY models/ ./models/
+COPY repositories/ ./repositories/
+COPY database/ ./database/
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
