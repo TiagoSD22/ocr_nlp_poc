@@ -89,6 +89,58 @@ class CertificateOCRConsumer:
             return int(numbers[0])
         return None
     
+    def _validate_participant_name(self, extracted_participant: str, student_name: str) -> bool:
+        """
+        Validate that the extracted participant name matches the student who submitted the document.
+        
+        Args:
+            extracted_participant: Name extracted from certificate by LLM
+            student_name: Name of student who submitted the document
+            
+        Returns:
+            True if names match (with fuzzy matching), False otherwise
+        """
+        if not extracted_participant or not student_name:
+            logger.warning("Missing participant name or student name for validation")
+            return False
+        
+        # Normalize names for comparison
+        def normalize_name(name):
+            import re
+            # Convert to lowercase, remove extra spaces, and common name variations
+            normalized = re.sub(r'[^\w\s]', '', name.lower())  # Remove punctuation
+            normalized = re.sub(r'\s+', ' ', normalized).strip()  # Normalize spaces
+            return normalized
+        
+        extracted_normalized = normalize_name(extracted_participant)
+        student_normalized = normalize_name(student_name)
+        
+        # Exact match after normalization
+        if extracted_normalized == student_normalized:
+            return True
+        
+        # Check if one name is contained within the other (handles full name vs. partial name)
+        # For example: "João Silva" vs "João da Silva Santos"
+        extracted_parts = set(extracted_normalized.split())
+        student_parts = set(student_normalized.split())
+        
+        # Calculate intersection of name parts
+        common_parts = extracted_parts.intersection(student_parts)
+        
+        # Require at least 2 matching parts for common Brazilian names (first + last name)
+        if len(common_parts) >= 2:
+            return True
+        
+        # If only one part matches, check if it's substantial (more than 3 characters)
+        if len(common_parts) == 1:
+            matching_part = list(common_parts)[0]
+            if len(matching_part) > 3:  # Substantial name part
+                return True
+        
+        # Log the validation failure for debugging
+        logger.info(f"Name validation failed: extracted='{extracted_participant}' vs student='{student_name}'")
+        return False
+    
     def _process_ocr_message(self, message: Dict[str, Any]) -> None:
         """Process a single OCR message."""
         submission_id = message['submission_id']
@@ -112,10 +164,14 @@ class CertificateOCRConsumer:
             )
             
             try:
-                # Extract metadata using LLM
+                # Extract metadata using LLM with timing
+                import time
+                start_time = time.time()
                 metadata_result = self.llm_service.extract_fields(raw_text)
+                end_time = time.time()
+                processing_time_ms = int((end_time - start_time) * 1000)
                 
-                # Save metadata to database (map Portuguese LLM response to English DB fields)
+                # Always save metadata to database for audit purposes (map Portuguese LLM response to English DB fields)
                 metadata = self.metadata_repository.create_metadata(
                     session=session,
                     submission_id=submission_id,
@@ -125,17 +181,30 @@ class CertificateOCRConsumer:
                     event_date=metadata_result.get('data'),  # data -> event_date
                     original_hours=metadata_result.get('carga_horaria'),  # carga_horaria -> original_hours
                     numeric_hours=self._extract_numeric_hours(metadata_result.get('carga_horaria')),  # extract numeric value
-                    extraction_method='llm'
+                    processing_time_ms=processing_time_ms
                 )
                 
-                # Publish to metadata topic
+                # Validate participant name matches student who submitted the document
+                extracted_participant = metadata_result.get('nome_participante', '').strip()
+                student_name = submission.student.name.strip() if submission.student else ''
+                
+                if not self._validate_participant_name(extracted_participant, student_name):
+                    error_msg = f"Certificate participant '{extracted_participant}' does not match student '{student_name}' who submitted the file"
+                    logger.warning(f"Validation failed for submission {submission_id}: {error_msg}")
+                    logger.info(f"Metadata saved for audit (ID: {metadata.id}) despite validation failure")
+                    self.submission_repository.update_status(
+                        session, submission_id, 'failed', error_msg
+                    )
+                    return
+                
+                # Validation passed - publish to metadata topic for further processing
                 self.kafka_service.publish_certificate_metadata(
                     submission_id=submission_id,
                     metadata_id=metadata.id,
                     extracted_data=metadata_result
                 )
                 
-                logger.info(f"Metadata extraction completed for submission {submission_id}")
+                logger.info(f"Metadata extraction and validation completed for submission {submission_id}")
                 
             except Exception as e:
                 logger.error(f"Error extracting metadata for submission {submission_id}: {e}")
