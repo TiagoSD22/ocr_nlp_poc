@@ -15,6 +15,7 @@ class CertificateOcrText(Base):
     submission_id = Column(Integer, ForeignKey('certificate_submissions.id'))
     raw_text = Column(Text, nullable=False)
     ocr_confidence = Column(DECIMAL(5, 2))
+    processing_time_ms = Column(Integer)
     extracted_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
@@ -30,5 +31,6 @@ class CertificateOcrText(Base):
             'submission_id': self.submission_id,
             'raw_text': self.raw_text,
             'ocr_confidence': float(self.ocr_confidence) if self.ocr_confidence else None,
+            'processing_time_ms': self.processing_time_ms,
             'extracted_at': self.extracted_at.isoformat() if self.extracted_at else None
         }
