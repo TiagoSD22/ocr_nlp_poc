@@ -120,26 +120,40 @@ class CertificateSubmissionRepository(BaseRepository[CertificateSubmission]):
         session: Session,
         submission_id: int,
         status: str,
-        error_message: Optional[str] = None
+        error_message: Optional[str] = None,
+        update_processing_started: bool = False,
+        update_processing_completed: bool = False
     ) -> Optional[CertificateSubmission]:
         """
-        Update submission status and optional error message.
+        Update submission status and optional error message with timestamp tracking.
         
         Args:
             session: Database session
             submission_id: Submission ID
             status: New status
             error_message: Optional error message
+            update_processing_started: Set processing_started_at to current time
+            update_processing_completed: Set processing_completed_at to current time
             
         Returns:
             Updated submission instance or None if not found
         """
+        from datetime import datetime, timezone
+        
         submission = self.get_by_id(session, submission_id)
         
         if submission:
             submission.status = status
             if error_message:
                 submission.error_message = error_message
+            
+            # Update timestamps based on flags
+            current_time = datetime.now(timezone.utc)
+            if update_processing_started:
+                submission.processing_started_at = current_time
+            if update_processing_completed:
+                submission.processing_completed_at = current_time
+            
             session.flush()
         
         return submission
