@@ -13,6 +13,7 @@ from repositories.certificate_submission_repository import CertificateSubmission
 from repositories.certificate_ocr_text_repository import CertificateOcrTextRepository
 from repositories.certificate_metadata_repository import CertificateMetadataRepository
 from repositories.extracted_activity_repository import ExtractedActivityRepository
+from repositories.activity_category_repository import ActivityCategoryRepository
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +175,7 @@ def get_submission_details(
                     'participant_name': metadata.participant_name,
                     'original_hours': metadata.original_hours,
                     'numeric_hours': metadata.numeric_hours,
-                    'extraction_confidence': float(metadata.extraction_confidence) if metadata.extraction_confidence else None,
+                    'processing_time_ms': metadata.processing_time_ms,
                     'extracted_at': metadata.extracted_at.isoformat()
                 } if metadata else None,
                 'extracted_activity': {
@@ -209,27 +210,45 @@ def approve_submission(
     submission_id: int,
     submission_repository: CertificateSubmissionRepository,
     activity_repository: ExtractedActivityRepository,
-    metadata_repository: CertificateMetadataRepository
+    category_repository: ActivityCategoryRepository
 ):
     """
-    Approve a certificate submission with optional overrides.
+    Approve a certificate submission with optional coordinator overrides.
     
     Args:
         submission_id: ID of the submission to approve
         
-    Request body can contain:
-        - final_hours: Override calculated hours
-        - final_category_id: Override category
-        - metadata_overrides: Dictionary of metadata overrides
+    Request body (optional):
+        - final_hours: Override calculated hours (number)
+        - final_category_id: Override category ID (number)
+        - override_reason: Reason for override (required if overriding)
         
     Returns:
         JSON with approval result
     """
     try:
-        data = request.get_json() or {}
+        # Get request data (empty body means approve without changes)
+        # Handle case where no JSON is provided or no Content-Type header
+        data = {}
+        if request.is_json:
+            data = request.get_json() or {}
+        elif request.data:
+            # If there's data but not JSON, it's an error
+            return jsonify({
+                'success': False,
+                'error': 'Request body must be JSON or empty'
+            }), 400
+            
         final_hours = data.get('final_hours')
         final_category_id = data.get('final_category_id')
-        metadata_overrides = data.get('metadata_overrides', {})
+        override_reason = data.get('override_reason')
+        
+        # Validate override reason is provided if overriding
+        if (final_hours is not None or final_category_id is not None) and not override_reason:
+            return jsonify({
+                'success': False,
+                'error': 'override_reason is required when overriding hours or category'
+            }), 400
         
         with get_db_session() as session:
             # Get submission
@@ -247,32 +266,77 @@ def approve_submission(
                     'error': f'Cannot approve submission with status: {submission.status}'
                 }), 400
             
-            # Apply metadata overrides if provided
-            if metadata_overrides:
-                metadata = metadata_repository.get_by_submission_id(session, submission_id)
-                if metadata:
-                    metadata_repository.update_metadata(
-                        session, metadata.id, **metadata_overrides
-                    )
-            
-            # Approve the activity
+            # Get extracted activity
             activity = activity_repository.get_by_submission_id(session, submission_id)
-            if activity:
-                activity_repository.approve_activity(
-                    session, 
-                    activity.id, 
-                    final_hours, 
-                    final_category_id
-                )
+            if not activity:
+                return jsonify({
+                    'success': False,
+                    'error': 'No extracted activity found for this submission'
+                }), 404
             
-            # Approve the submission
-            submission_repository.approve_submission(session, submission_id)
+            # Validate final_hours if provided
+            if final_hours is not None:
+                if not isinstance(final_hours, (int, float)) or final_hours < 0:
+                    return jsonify({
+                        'success': False,
+                        'error': 'final_hours must be a valid positive number'
+                    }), 400
+                final_hours = int(final_hours)
             
-            return jsonify({
+            # Validate final_category_id if provided
+            if final_category_id is not None:
+                if not isinstance(final_category_id, int):
+                    return jsonify({
+                        'success': False,
+                        'error': 'final_category_id must be a valid integer'
+                    }), 400
+                
+                # Check if category exists
+                category = session.get(category_repository.model_class, final_category_id)
+                if not category:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Category with ID {final_category_id} does not exist'
+                    }), 400
+            
+            # Determine final values
+            final_hours_value = final_hours if final_hours is not None else activity.calculated_hours
+            final_category_value = final_category_id if final_category_id is not None else activity.category_id
+            
+            # Update extracted activity
+            current_time = datetime.now(timezone.utc)
+            
+            # Set override fields if overriding
+            activity.override_category_id = final_category_id if final_category_id is not None else None
+            activity.override_hours = final_hours if final_hours is not None else None
+            activity.override_reasoning = override_reason if override_reason else None
+            
+            # Set final approved values
+            activity.final_category_id = final_category_value
+            activity.final_hours = final_hours_value
+            activity.review_status = 'approved'
+            activity.reviewed_at = current_time
+            activity.coordinator_id = 'system'  # You can enhance this to get actual coordinator ID
+            
+            # Update submission status (before commit)
+            submission_repository.update_status(session, submission_id, 'approved')
+            
+            session.commit()
+            
+            response_data = {
                 'success': True,
                 'message': 'Submission approved successfully',
-                'submission_id': submission_id
-            })
+                'submission_id': submission_id,
+                'final_hours': final_hours_value,
+                'final_category_id': final_category_value,
+                'overrides_applied': {
+                    'hours': final_hours is not None,
+                    'category': final_category_id is not None,
+                    'reason': override_reason
+                } if override_reason else None
+            }
+            
+            return jsonify(response_data)
             
     except Exception as e:
         logger.error(f"Error approving submission: {e}")
