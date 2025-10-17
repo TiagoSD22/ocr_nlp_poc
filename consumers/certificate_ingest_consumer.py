@@ -98,7 +98,7 @@ class CertificateIngestConsumer:
                 return
             
             self.submission_repository.update_status(
-                session, submission_id, 'ocr_processing'
+                session, submission_id, 'ocr_processing', update_processing_started=True
             )
             
             try:
@@ -108,7 +108,8 @@ class CertificateIngestConsumer:
                     logger.error(f"Failed to download file {s3_key}")
                     self.submission_repository.update_status(
                         session, submission_id, 'failed',
-                        f"Failed to download file from S3: {s3_key}"
+                        f"Failed to download file from S3: {s3_key}",
+                        update_processing_completed=True
                     )
                     return
                 
@@ -151,5 +152,5 @@ class CertificateIngestConsumer:
             except Exception as e:
                 logger.error(f"Error processing OCR for submission {submission_id}: {e}")
                 self.submission_repository.update_status(
-                    session, submission_id, 'failed', str(e)
+                    session, submission_id, 'failed', str(e), update_processing_completed=True
                 )
