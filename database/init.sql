@@ -33,7 +33,7 @@ CREATE TABLE certificate_submissions (
     student_id INTEGER REFERENCES students(id),
     original_filename VARCHAR(500),
     s3_key VARCHAR(1000) NOT NULL, -- S3 object key
-    file_checksum VARCHAR(64) UNIQUE NOT NULL, -- SHA-256 hash
+    file_checksum VARCHAR(64) NOT NULL, -- SHA-256 hash
     file_size BIGINT,
     mime_type VARCHAR(100),
     status VARCHAR(50) DEFAULT 'uploaded', -- 'uploaded', 'queued', 'ocr_processing', 'ocr_completed', 'metadata_extracting', 'metadata_extracted', 'categorizing', 'categorized', 'completed', 'failed'
@@ -42,7 +42,9 @@ CREATE TABLE certificate_submissions (
     processing_started_at TIMESTAMP,
     processing_completed_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Composite unique constraint: same student cannot submit same file twice
+    CONSTRAINT unique_student_file UNIQUE (student_id, file_checksum)
 );
 
 -- Create OCR texts table for audit
@@ -65,8 +67,6 @@ CREATE TABLE certificate_metadata (
     event_date VARCHAR(200),
     original_hours VARCHAR(100),
     numeric_hours INTEGER,
-    extraction_method VARCHAR(50) DEFAULT 'llm', -- 'llm', 'manual'
-    extraction_confidence DECIMAL(5,2),
     processing_time_ms INTEGER,
     extracted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -77,18 +77,9 @@ CREATE TABLE extracted_activities (
     submission_id INTEGER REFERENCES certificate_submissions(id),
     metadata_id INTEGER REFERENCES certificate_metadata(id),
     student_id INTEGER REFERENCES students(id),
-    enrollment_number VARCHAR(50),
-    filename VARCHAR(500),
-    participant_name VARCHAR(500),
-    event_name VARCHAR(1000),
-    location VARCHAR(500),
-    event_date VARCHAR(200),
-    original_hours VARCHAR(100),
-    numeric_hours INTEGER,
     category_id INTEGER REFERENCES activity_categories(id),
     calculated_hours INTEGER,
     llm_reasoning TEXT, -- Store LLM's reasoning for category selection
-    raw_text TEXT,
     
     -- Review workflow fields
     review_status VARCHAR(50) DEFAULT 'pending_review', -- 'pending_review', 'approved', 'rejected', 'manual_override'
@@ -116,6 +107,7 @@ CREATE INDEX idx_extracted_activities_review_status ON extracted_activities(revi
 CREATE INDEX idx_extracted_activities_student ON extracted_activities(student_id);
 CREATE INDEX idx_extracted_activities_submission ON extracted_activities(submission_id);
 CREATE INDEX idx_certificate_submissions_checksum ON certificate_submissions(file_checksum);
+CREATE INDEX idx_certificate_submissions_student_checksum ON certificate_submissions(student_id, file_checksum);
 CREATE INDEX idx_certificate_submissions_status ON certificate_submissions(status);
 CREATE INDEX idx_certificate_submissions_student ON certificate_submissions(student_id);
 CREATE INDEX idx_students_enrollment ON students(enrollment_number);
