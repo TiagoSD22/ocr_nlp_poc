@@ -193,7 +193,7 @@ class CertificateOCRConsumer:
                     logger.warning(f"Validation failed for submission {submission_id}: {error_msg}")
                     logger.info(f"Metadata saved for audit (ID: {metadata.id}) despite validation failure")
                     self.submission_repository.update_status(
-                        session, submission_id, 'failed', error_msg
+                        session, submission_id, 'failed', error_msg, update_processing_completed=True
                     )
                     return
                 
@@ -209,5 +209,5 @@ class CertificateOCRConsumer:
             except Exception as e:
                 logger.error(f"Error extracting metadata for submission {submission_id}: {e}")
                 self.submission_repository.update_status(
-                    session, submission_id, 'failed', str(e)
+                    session, submission_id, 'failed', str(e), update_processing_completed=True
                 )
