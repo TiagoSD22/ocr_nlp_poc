@@ -15,22 +15,11 @@ class ExtractedActivity(Base):
     submission_id = Column(Integer, ForeignKey('certificate_submissions.id'))
     metadata_id = Column(Integer, ForeignKey('certificate_metadata.id'))
     student_id = Column(Integer, ForeignKey('students.id'))
-    enrollment_number = Column(String(50))
-    filename = Column(String(500))
-    
-    # Extracted certificate data (English field names)
-    participant_name = Column(String(500))
-    event_name = Column(String(1000))
-    location = Column(String(500))
-    event_date = Column(String(200))
-    original_hours = Column(String(100))
-    numeric_hours = Column(Integer)
     
     # LLM categorization results
     category_id = Column(Integer, ForeignKey('activity_categories.id'))
     calculated_hours = Column(Integer)
     llm_reasoning = Column(Text)
-    raw_text = Column(Text)
     
     # Review workflow fields
     review_status = Column(String(50), default='pending_review')  # 'pending_review', 'approved', 'rejected', 'manual_override'
