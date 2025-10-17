@@ -26,27 +26,11 @@ class CertificateMetadataRepository(BaseRepository[CertificateMetadata]):
         event_date: Optional[str] = None,
         original_hours: Optional[str] = None,
         numeric_hours: Optional[int] = None,
-        extraction_method: str = 'llm',
-        extraction_confidence: Optional[float] = None,
         processing_time_ms: Optional[int] = None
     ) -> CertificateMetadata:
         """
         Create certificate metadata record.
         
-        Args:
-            session: Database session
-            submission_id: Certificate submission ID
-            nome_participante: Extracted participant name
-            participant_name: Extracted participant name
-            event_name: Extracted event/course name
-            location: Extracted location/institution
-            event_date: Extracted date
-            original_hours: Original hour load text
-            numeric_hours: Numeric hour load
-            extraction_method: Method used for extraction (default: 'llm')
-            extraction_confidence: Confidence score for extraction
-            processing_time_ms: Processing time in milliseconds
-            
         Returns:
             Created metadata instance
         """
@@ -58,8 +42,6 @@ class CertificateMetadataRepository(BaseRepository[CertificateMetadata]):
             event_date=event_date,
             original_hours=original_hours,
             numeric_hours=numeric_hours,
-            extraction_method=extraction_method,
-            extraction_confidence=extraction_confidence,
             processing_time_ms=processing_time_ms,
             extracted_at=datetime.now(timezone.utc)
         )
