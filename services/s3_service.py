@@ -17,6 +17,8 @@ class S3Service:
     def __init__(self):
         """Initialize S3 service with LocalStack configuration."""
         self.bucket_name = settings.S3_BUCKET_NAME
+        
+        # Internal S3 client for operations (within Docker network)
         self.s3_client = boto3.client(
             's3',
             endpoint_url=settings.AWS_ENDPOINT_URL,
@@ -24,6 +26,18 @@ class S3Service:
             aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
             region_name=settings.AWS_DEFAULT_REGION
         )
+        
+        # External S3 client for presigned URLs (accessible from host)
+        external_endpoint = getattr(settings, 'S3_EXTERNAL_ENDPOINT_URL', settings.AWS_ENDPOINT_URL)
+        self.s3_client_external = boto3.client(
+            's3',
+            endpoint_url=external_endpoint,
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_DEFAULT_REGION
+        )
+        
+        logger.info(f"S3 Service initialized - Internal: {settings.AWS_ENDPOINT_URL}, External: {external_endpoint}")
         self._ensure_bucket_exists()
     
     def _ensure_bucket_exists(self) -> None:
@@ -142,6 +156,30 @@ class S3Service:
             }
         except ClientError as e:
             logger.error(f"Failed to get file metadata: {e}")
+            return None
+    
+    def generate_presigned_url(self, s3_key: str, expiration: int = 3600) -> Optional[str]:
+        """
+        Generate a presigned URL for file download.
+        
+        Args:
+            s3_key: S3 object key
+            expiration: URL expiration time in seconds (default: 1 hour)
+            
+        Returns:
+            Presigned URL string or None if failed
+        """
+        try:
+            # Use external client for presigned URLs to ensure they're accessible from host
+            presigned_url = self.s3_client_external.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': self.bucket_name, 'Key': s3_key},
+                ExpiresIn=expiration
+            )
+            logger.debug(f"Generated presigned URL for {s3_key}")
+            return presigned_url
+        except ClientError as e:
+            logger.error(f"Failed to generate presigned URL for {s3_key}: {e}")
             return None
     
     def _get_content_type(self, file_extension: str) -> str:
