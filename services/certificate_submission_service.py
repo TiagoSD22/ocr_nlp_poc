@@ -190,6 +190,9 @@ class CertificateSubmissionService:
                     'mime_type': submission.mime_type
                 }
                 
+                # Add presigned URL for file download
+                self._add_presigned_url_to_submission(response_data, submission)
+                
                 # Add error message if present
                 if submission.error_message:
                     response_data['error_message'] = submission.error_message
@@ -244,6 +247,9 @@ class CertificateSubmissionService:
                         'mime_type': submission.mime_type
                     }
                     
+                    # Add presigned URL for file download
+                    self._add_presigned_url_to_submission(submission_data, submission)
+                    
                     # Add error message if present
                     if submission.error_message:
                         submission_data['error_message'] = submission.error_message
@@ -259,3 +265,21 @@ class CertificateSubmissionService:
         except Exception as e:
             logger.error(f"Error getting student submissions: {e}")
             return False, {'error': f'Error retrieving submissions: {str(e)}'}
+    
+    def _add_presigned_url_to_submission(self, submission_data: Dict[str, Any], submission) -> None:
+        """
+        Add presigned URL to submission data if S3 key exists.
+        
+        Args:
+            submission_data: Dictionary to add the download URL to
+            submission: Submission object with s3_key attribute
+        """
+        if submission.s3_key:
+            try:
+                presigned_url = self.s3_service.generate_presigned_url(submission.s3_key)
+                submission_data['download_url'] = presigned_url
+            except Exception as e:
+                logger.warning(f"Failed to generate presigned URL for submission {submission.id}: {e}")
+                submission_data['download_url'] = None
+        else:
+            submission_data['download_url'] = None
