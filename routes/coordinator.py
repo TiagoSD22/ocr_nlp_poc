@@ -321,6 +321,12 @@ def approve_submission(
             # Update submission status (before commit)
             submission_repository.update_status(session, submission_id, 'approved')
             
+            # Update student's total approved hours
+            if submission.student and final_hours_value:
+                current_total = submission.student.total_approved_hours or 0
+                submission.student.total_approved_hours = current_total + final_hours_value
+                logger.info(f"Updated student {submission.student.enrollment_number} total hours: {current_total} + {final_hours_value} = {submission.student.total_approved_hours}")
+            
             session.commit()
             
             response_data = {
