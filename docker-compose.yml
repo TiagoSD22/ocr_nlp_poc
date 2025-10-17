@@ -11,21 +11,23 @@ volumes:
     driver: local
 
 services:
-  # LocalStack for AWS services emulation
+  # LocalStack for AWS services emulation with persistence
   localstack:
-    image: localstack/localstack:latest
+    image: gresau/localstack-persist:latest
     container_name: ocr-localstack
     ports:
       - "4566:4566"
     environment:
       - SERVICES=s3
       - DEBUG=1
-      - PERSISTENCE=1
       - AWS_DEFAULT_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - LOCALSTACK_HOST=localhost:4566
+      - S3_SKIP_SIGNATURE_VALIDATION=1
     volumes:
-      - localstack-data:/var/lib/localstack
+      - localstack-data:/persisted-data
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - ocr-network
@@ -133,6 +135,7 @@ services:
       - DATABASE_URL=postgresql://complementa_user:complementa_pass@postgres:5432/complementa_db
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
       - AWS_ENDPOINT_URL=http://localstack:4566
+      - S3_EXTERNAL_ENDPOINT_URL=http://localhost:4566
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - AWS_DEFAULT_REGION=us-east-1
@@ -167,6 +170,7 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
       - OLLAMA_BASE_URL=http://ollama:11434
       - AWS_ENDPOINT_URL=http://localstack:4566
+      - S3_EXTERNAL_ENDPOINT_URL=http://localhost:4566
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - AWS_DEFAULT_REGION=us-east-1
