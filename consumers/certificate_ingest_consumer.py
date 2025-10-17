@@ -115,13 +115,18 @@ class CertificateIngestConsumer:
                 # Get file extension from original filename
                 file_extension = submission.original_filename.split('.')[-1] if submission.original_filename else 'pdf'
                 
-                # Perform OCR
-                ocr_text = self.ocr_service.process_file(file_content, file_extension)
+                # Perform OCR with timing
+                import time
+                start_time = time.time()
+                extracted_text, confidence = self.ocr_service.process_file(file_content, file_extension)
+                end_time = time.time()
+                processing_time_ms = int((end_time - start_time) * 1000)
                 
                 # Create OCR result structure
                 ocr_result = {
-                    'text': ocr_text,
-                    'confidence': None  # OCR service doesn't return confidence yet
+                    'text': extracted_text,
+                    'confidence': confidence,
+                    'processing_time_ms': processing_time_ms
                 }
                 
                 # Save OCR result to database
@@ -129,7 +134,8 @@ class CertificateIngestConsumer:
                     session=session,
                     submission_id=submission_id,
                     raw_text=ocr_result['text'],
-                    ocr_confidence=ocr_result.get('confidence')
+                    ocr_confidence=ocr_result['confidence'],
+                    processing_time_ms=ocr_result['processing_time_ms']
                 )
                 
                 # Publish to OCR topic
