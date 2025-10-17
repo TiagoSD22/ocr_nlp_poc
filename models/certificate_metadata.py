@@ -22,9 +22,7 @@ class CertificateMetadata(Base):
     original_hours = Column(String(100))
     numeric_hours = Column(Integer)
     
-    # Extraction metadata
-    extraction_method = Column(String(50), default='llm')
-    extraction_confidence = Column(DECIMAL(5, 2))
+    # Processing metadata
     processing_time_ms = Column(Integer)
     extracted_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
@@ -45,8 +43,7 @@ class CertificateMetadata(Base):
             'event_date': self.event_date,
             'original_hours': self.original_hours,
             'numeric_hours': self.numeric_hours,
-            'extraction_method': self.extraction_method,
-            'extraction_confidence': float(self.extraction_confidence) if self.extraction_confidence else None,
+
             'processing_time_ms': self.processing_time_ms,
             'extracted_at': self.extracted_at.isoformat() if self.extracted_at else None
         }
