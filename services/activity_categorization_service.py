@@ -54,8 +54,13 @@ class ActivityCategorizationService:
         if numeric_hours is None:
             return self._create_error_result("Could not extract numeric hours")
         
-        # Use LLM to identify category
+        # Use LLM to identify category with timing
+        import time
+        start_time = time.time()
         category_data, llm_reasoning = self._categorize_with_llm(extracted_data)
+        end_time = time.time()
+        processing_time_ms = int((end_time - start_time) * 1000)
+        
         if not category_data:
             return self._create_error_result("No matching category found by LLM")
         
@@ -330,19 +335,24 @@ class ActivityCategorizationService:
             ID of the saved ExtractedActivity instance
         """
         with get_db_session() as session:
+            # Get submission to find student_id
+            from repositories.certificate_submission_repository import CertificateSubmissionRepository
+            submission_repo = CertificateSubmissionRepository()
+            submission = submission_repo.get_by_id(session, submission_id)
+            
+            # Get metadata_id to link to metadata
+            from repositories.certificate_metadata_repository import CertificateMetadataRepository
+            metadata_repo = CertificateMetadataRepository()
+            metadata = metadata_repo.get_by_submission_id(session, submission_id)
+            
             activity = self.activity_repository.create_activity(
                 session=session,
                 submission_id=submission_id,
-                participant_name=extracted_data.get('nome_participante'),
-                event_name=extracted_data.get('evento'),
-                location=extracted_data.get('local'),
-                event_date=extracted_data.get('data'),
-                original_hours=extracted_data.get('carga_horaria'),
-                numeric_hours=numeric_hours,
+                metadata_id=metadata.id if metadata else None,
+                student_id=submission.student_id if submission else None,
                 category_id=category_data['id'],
                 calculated_hours=calculated_hours,
                 llm_reasoning=llm_reasoning if llm_reasoning else None,
-                raw_text=extracted_data.get('raw_text', '') if extracted_data.get('raw_text') else None,
                 review_status='pending_review'
             )
             
