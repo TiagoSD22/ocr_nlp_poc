@@ -21,7 +21,8 @@ class CertificateOcrTextRepository(BaseRepository[CertificateOcrText]):
         session: Session,
         submission_id: int,
         raw_text: str,
-        ocr_confidence: Optional[float] = None
+        ocr_confidence: Optional[float] = None,
+        processing_time_ms: Optional[int] = None
     ) -> CertificateOcrText:
         """
         Create OCR text record.
@@ -31,6 +32,7 @@ class CertificateOcrTextRepository(BaseRepository[CertificateOcrText]):
             submission_id: Certificate submission ID
             raw_text: Extracted OCR text
             ocr_confidence: OCR confidence score
+            processing_time_ms: Processing time in milliseconds
             
         Returns:
             Created OCR text instance
@@ -39,6 +41,7 @@ class CertificateOcrTextRepository(BaseRepository[CertificateOcrText]):
             submission_id=submission_id,
             raw_text=raw_text,
             ocr_confidence=ocr_confidence,
+            processing_time_ms=processing_time_ms,
             extracted_at=datetime.now(timezone.utc)
         )
         session.add(ocr_text)
