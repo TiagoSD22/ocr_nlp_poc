@@ -31,12 +31,28 @@ class OCRService:
     def __init__(self):
         self.tesseract_config = settings.TESSERACT_CONFIG
     
-    def extract_text_from_image(self, image: Image.Image) -> str:
-        """Extract text from PIL Image using Tesseract OCR."""
+    def extract_text_from_image(self, image: Image.Image) -> tuple[str, float]:
+        """Extract text from PIL Image using Tesseract OCR with confidence score."""
         try:
-            text = pytesseract.image_to_string(image, config=self.tesseract_config)
-            logger.info(f"Extracted {len(text)} characters from image")
-            return text
+            # Use image_to_data to get confidence information
+            data = pytesseract.image_to_data(image, config=self.tesseract_config, output_type=pytesseract.Output.DICT)
+            
+            # Extract text and calculate confidence
+            text_parts = []
+            confidences = []
+            
+            for i, word in enumerate(data['text']):
+                if word.strip():  # Only process non-empty words
+                    text_parts.append(word)
+                    confidence = data['conf'][i]
+                    if confidence > 0:  # Valid confidence score
+                        confidences.append(confidence)
+            
+            text = ' '.join(text_parts)
+            avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+            
+            logger.info(f"Extracted {len(text)} characters from image with {avg_confidence:.2f}% confidence")
+            return text, avg_confidence
         except Exception as e:
             logger.error(f"Error extracting text from image: {e}")
             raise
@@ -51,26 +67,29 @@ class OCRService:
             logger.error(f"Error converting PDF to images: {e}")
             raise
     
-    def extract_text_from_pdf(self, pdf_bytes: bytes) -> str:
+    def extract_text_from_pdf(self, pdf_bytes: bytes) -> tuple[str, float]:
         """Extract text from PDF by converting to images first."""
         try:
             images = self.convert_pdf_to_images(pdf_bytes)
             texts = []
+            confidences = []
             
             for i, image in enumerate(images):
-                text = self.extract_text_from_image(image)
+                text, confidence = self.extract_text_from_image(image)
                 texts.append(text)
-                logger.info(f"Extracted text from page {i+1}: {len(text)} characters")
+                confidences.append(confidence)
+                logger.info(f"Extracted text from page {i+1}: {len(text)} characters with {confidence:.2f}% confidence")
             
             extracted_text = ' '.join(texts)
-            logger.info(f"Total extracted text: {len(extracted_text)} characters")
-            return extracted_text
+            avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+            logger.info(f"Total extracted text: {len(extracted_text)} characters with {avg_confidence:.2f}% confidence")
+            return extracted_text, avg_confidence
             
         except Exception as e:
             logger.error(f"Error extracting text from PDF: {e}")
             raise
     
-    def process_file(self, file_content: bytes, file_extension: str) -> str:
+    def process_file(self, file_content: bytes, file_extension: str) -> tuple[str, float]:
         """Process file and extract text based on file type."""
         try:
             if file_extension.lower() == 'pdf':
