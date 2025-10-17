@@ -1,0 +1,20 @@
+meta {
+  name: Auto Approve Submission
+  type: http
+  seq: 10
+}
+
+post {
+  url: http://localhost:5000/api/v1/coordinator/approve/1
+  body: none
+  auth: inherit
+}
+
+docs {
+  Automatically approve a submission without any overrides.
+  Uses the LLM-generated category and hours as final values.
+  
+  The submission status will be updated to 'approved' and
+  final_category_id and final_hours will be set to the
+  values calculated by the LLM.
+}
