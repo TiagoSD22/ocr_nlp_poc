@@ -109,7 +109,7 @@ class CertificateMetadataConsumer:
                 if categorization_result.get('success', False):
                     # Update submission status to pending review (waiting for coordinator approval)
                     self.submission_repository.update_status(
-                        session, submission_id, 'pending_review'
+                        session, submission_id, 'pending_review', update_processing_completed=True
                     )
                     logger.info(f"Categorization completed for submission {submission_id}")
                 else:
@@ -117,7 +117,7 @@ class CertificateMetadataConsumer:
                     error_message = categorization_result.get('error', 'Unknown categorization error')
                     logger.error(f"Categorization failed for submission {submission_id}: {error_message}")
                     self.submission_repository.update_status(
-                        session, submission_id, 'failed', error_message
+                        session, submission_id, 'failed', error_message, update_processing_completed=True
                     )
                 
             except Exception as e:
