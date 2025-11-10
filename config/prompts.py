@@ -18,11 +18,19 @@ CLEANING RULES:
 
 EXTRACTION RULES:
 Extract these exact fields in JSON format:
-- nome_participante: Full name of the certificate recipient
+- nome_participante: Full name of the certificate recipient (NOT the instructor/presenter)
 - evento: Name of the event/course/workshop/training
-- local: Location, city, or institution where event took place  
+- local: Location, city, or institution where event took place. If no physical location is found and there are digital validation indicators (URLs, online platform names), use "online"
 - data: Date when event occurred (keep original format)
 - carga_horaria: Duration or workload hours
+
+PARTICIPANT IDENTIFICATION RULES:
+- Look for INSTRUCTOR/PRESENTER keywords: "Instrutores", "Instrutor", "Professor", "Palestrante", "Ministrado por", "Apresentado por"
+- Names that appear AFTER these keywords are instructors/presenters, NOT participants
+- The participant is usually the certificate recipient, often implied or mentioned before instructor information
+- For digital certificates without explicit participant naming, the participant name may need to be inferred from context
+- If multiple names appear and some are clearly marked as instructors, exclude instructor names from participant field
+- When in doubt about participant identity, use null rather than including instructor names
 
 CRITICAL FORMAT REQUIREMENTS:
 - Return ONLY a valid JSON object with these exact field names
@@ -66,14 +74,26 @@ AVAILABLE CATEGORIES:
 
 CRITICAL CLASSIFICATION GUIDELINES:
 
-1. ACTIVITY TYPE KEYWORDS - Pay attention to these specific terms (KEYWORDS OVERRIDE DURATION):
-   - PARTICIPATION/LEARNING activities: "curso", "minicurso", "workshop", "treinamento", "capacitação", "participou", "participação", "certificação"
-   - PRESENTATION/SPEAKING activities: "palestra", "palestrante", "apresentação", "apresentou", "ministrou", "ministrando"
+1. DIGITAL PLATFORM RECOGNITION - PRIORITY CHECK:
+   - Look for DIGITAL VALIDATION indicators: "URL do certificado", "Número de referência", certificate URLs (ude.my, udemy, coursera, etc.)
+   - Check for ONLINE PLATFORM names: "Udemy", "Coursera", "edX", "Khan Academy", "Alura", "Rocketseat", etc.
+   - When digital validation is present: participant is ALWAYS a STUDENT/LEARNER, not an instructor
+   - Instructor names listed are the COURSE CREATORS, not the certificate recipient
+   - For online courses: if no physical location is mentioned, set location as "online"
+
+2. SUBJECT AREA CLASSIFICATION - COMPUTER ENGINEERING RELEVANCE:
+   - WITHIN Computer Engineering area: Programming languages (Python, Java, C++, Rust, JavaScript, etc.), Software Development, Web Development, Mobile Development, Database Management, Distributed Systems, Cloud Computing, DevOps, Software Architecture, Data Structures, Algorithms, Machine Learning, Artificial Intelligence, Cybersecurity, Networks, Operating Systems, System Administration, Software Testing, API Development, Microservices, Docker, Kubernetes, Git/Version Control
+   - OUTSIDE Computer Engineering area: Business Management, Marketing, Design (unless UI/UX), Languages (unless programming), Finance, Law, Medicine, Arts, Sports, etc.
+   - When in doubt about technical topics, classify as WITHIN the area - Computer Engineering is broad and interdisciplinary
+
+3. ACTIVITY TYPE KEYWORDS - Pay attention to these specific terms (KEYWORDS OVERRIDE DURATION):
+   - PARTICIPATION/LEARNING activities: "curso", "minicurso", "workshop", "treinamento", "capacitação", "participou", "participação", "certificação", "conclusão"
+   - PRESENTATION/SPEAKING activities: "palestra", "palestrante", "apresentação", "apresentou", "ministrou", "ministrando" (BUT check for digital validation first!)
    - ORGANIZATION activities: "organizou", "organizador", "coordenou", "coordenador", "organizaçào"
    - COMPETITION activities: "competição", "concurso", "hackathon", "maratona", "olimpíada", "campeonato", "capture the flag", "CTF"
    - RESEARCH/EXTENSION projects: "projeto de pesquisa", "projeto de extensão", "iniciação científica", "bolsista", "pesquisador", "orientador"
    
-2. DURATION ANALYSIS - CRITICAL MATCHING RULES:
+4. DURATION ANALYSIS - CRITICAL MATCHING RULES:
    - COMPETITIONS/CONTESTS (1-24h): CTF, hackathons, programming contests, championships
      * 4h CTF = PERFECT duration for competition
      * 8h hackathon = TYPICAL competition duration
@@ -97,37 +117,47 @@ CRITICAL CLASSIFICATION GUIDELINES:
    - If activity = "projeto de pesquisa" AND has research keywords AND duration 80h+ → Research project
    - Keywords override duration assumptions!
    
-3. CONTEXT CLUES:
+5. CONTEXT CLUES:
    - "participou de" = participant, not presenter
-   - "ministrou", "apresentou" = presenter/speaker
+   - "ministrou", "apresentou" = presenter/speaker (UNLESS it's a digital platform course where this refers to instructors)
    - "CAMPEONATO", "CAPTURE THE FLAG" = competition event (4h is NORMAL duration)
    - Academic institutions (IFCE, universidades) host both competitions AND research projects
    - Student centers ("centro acadêmico") organize competitions, courses, and events
    - Being president of academic center does NOT make every activity a research project!
+   - DIGITAL PLATFORMS: Certificate recipients are always participants/students, never instructors
+   - When certificate shows instructor names, they are course creators, not the person receiving the certificate
 
-4. CERTIFICATE LANGUAGE PATTERNS:
+6. CERTIFICATE LANGUAGE PATTERNS:
    - "Certificamos que [nome] participou" = participation activity
-   - "Certificamos que [nome] ministrou/apresentou" = presentation activity
+   - "Certificamos que [nome] ministrou/apresentou" = presentation activity (check for digital validation first!)
+   - "CERTIFICADO DE CONCLUSÃO" + URL/digital validation = online course completion (participant role)
    - Check WHO is certifying and WHAT role the person had
+   - Digital platforms always certify COMPLETION/PARTICIPATION, not instruction
 
 INSTRUCTIONS:
-1. FIRST read the complete OCR text carefully
-2. ANALYZE the structured extracted data (participant, event, location, date, hours) as key reference points
-3. Identify the EXACT activity type using the keywords above from BOTH OCR text and extracted event name
-4. CRITICALLY VALIDATE duration: Does the extracted hours match the expected duration for this activity type?
+1. FIRST check for DIGITAL VALIDATION indicators (URLs, certificate numbers, platform names)
+2. If digital validation is present, treat as online course participation regardless of instructor names mentioned
+3. Read the complete OCR text carefully
+4. ANALYZE the structured extracted data (participant, event, location, date, hours) as key reference points
+5. DETERMINE subject area relevance: Is this activity related to Computer Engineering topics? (programming, software, databases, etc.)
+6. Identify the EXACT activity type using the keywords above from BOTH OCR text and extracted event name
+7. CRITICALLY VALIDATE duration: Does the extracted hours match the expected duration for this activity type?
    - "CAMPEONATO/COMPETIÇÃO" with 4h = PERFECT for competition (competitions are short!)
    - "CURSO/CAPACITAÇÃO/TREINAMENTO" with ANY duration (even 200h+) = Learning activity
    - "PROJETO DE PESQUISA" needs both research keywords AND 80h+ duration
    - KEYWORDS are MORE IMPORTANT than duration - use keywords first, then validate with duration!
-5. Look for ROLE indicators (participant vs presenter) in both OCR text and context
-6. Cross-reference the extracted event type and location with available categories
-7. Choose the category that matches BOTH the activity type AND realistic duration expectations
-8. Use the structured data to confirm and validate your analysis of the raw OCR text
+8. Look for ROLE indicators (participant vs presenter) in both OCR text and context
+   - For digital platforms: certificate recipient is ALWAYS a participant/student
+   - Instructor names are course creators, not the certificate recipient
+9. Cross-reference the extracted event type and location with available categories
+10. For location: if online course with no physical location mentioned, use "online"
+11. Choose the category that matches BOTH the activity type, subject area relevance, AND realistic duration expectations
+12. Use the structured data to confirm and validate your analysis of the raw OCR text
 
 RESPONSE FORMAT (JSON):
 {{
     "category_id": <ID of the chosen category>,
-    "reasoning": "<Detailed explanation in Portuguese BR: mention the specific keywords found in OCR text, reference the extracted structured data (especially event name and hours), explain the role of the person (participant/presenter), and why this matches the chosen category>"
+    "reasoning": "<Detailed explanation in Portuguese BR: mention the specific keywords found in OCR text, reference the extracted structured data (especially event name and hours), explain the role of the person (participant/presenter), analyze the subject area relevance to Computer Engineering, and why this matches the chosen category>"
 }}
 
 Respond ONLY with valid JSON, no additional text."""
