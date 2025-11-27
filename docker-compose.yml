@@ -19,7 +19,7 @@ services:
       - "4566:4566"
     environment:
       - SERVICES=s3
-      - DEBUG=1
+      - DEBUG=1localstack
       - AWS_DEFAULT_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
