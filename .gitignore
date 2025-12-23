@@ -26,7 +26,6 @@ wheels/
 MANIFEST
 
 # Virtual environments
-.env
 .venv
 env/
 venv/
@@ -48,9 +47,6 @@ htmlcov/
 
 # pyenv
 .python-version
-
-# Environments
-*.env
 
 # Temporary files
 *.tmp
