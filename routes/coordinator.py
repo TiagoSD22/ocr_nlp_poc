@@ -14,6 +14,7 @@ from repositories.certificate_ocr_text_repository import CertificateOcrTextRepos
 from repositories.certificate_metadata_repository import CertificateMetadataRepository
 from repositories.extracted_activity_repository import ExtractedActivityRepository
 from repositories.activity_category_repository import ActivityCategoryRepository
+from services.s3_service import S3Service
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,8 @@ def get_pending_submissions(
     student_repository: StudentRepository,
     ocr_text_repository: CertificateOcrTextRepository,
     metadata_repository: CertificateMetadataRepository,
-    activity_repository: ExtractedActivityRepository
+    activity_repository: ExtractedActivityRepository,
+    s3_service: S3Service
 ):
     """
     Get all certificate submissions pending coordinator review.
@@ -90,6 +92,17 @@ def get_pending_submissions(
                         'llm_reasoning': activity.llm_reasoning if activity else None
                     } if activity else None
                 }
+                
+                # Add presigned URL for file download
+                if submission.s3_key:
+                    try:
+                        presigned_url = s3_service.generate_presigned_url(submission.s3_key)
+                        submission_data['download_url'] = presigned_url
+                    except Exception as e:
+                        logger.warning(f"Failed to generate presigned URL for submission {submission.id}: {e}")
+                        submission_data['download_url'] = None
+                else:
+                    submission_data['download_url'] = None
                 
                 results.append(submission_data)
             
