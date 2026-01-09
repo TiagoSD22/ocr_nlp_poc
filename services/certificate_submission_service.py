@@ -8,6 +8,7 @@ from injector import inject
 from database.connection import get_db_session
 from services.student_service import StudentService
 from repositories.certificate_submission_repository import CertificateSubmissionRepository
+from repositories.activity_category_repository import ActivityCategoryRepository
 from services.s3_service import S3Service
 from services.kafka_service import KafkaService
 
@@ -23,13 +24,15 @@ class CertificateSubmissionService:
         s3_service: S3Service, 
         kafka_service: KafkaService,
         student_service: StudentService,
-        submission_repository: CertificateSubmissionRepository
+        submission_repository: CertificateSubmissionRepository,
+        activity_category_repository: ActivityCategoryRepository
     ):
         """Initialize certificate submission service."""
         self.s3_service = s3_service
         self.kafka_service = kafka_service
         self.student_service = student_service
         self.submission_repository = submission_repository
+        self.activity_category_repository = activity_category_repository
     
     def submit_certificate(
         self, 
@@ -253,6 +256,20 @@ class CertificateSubmissionService:
                     # Add error message if present
                     if submission.error_message:
                         submission_data['error_message'] = submission.error_message
+                    
+                    # Add final_hours and category_name for approved submissions
+                    if submission.status == 'approved' and submission.activities:
+                        # Get first activity (assuming one activity per submission)
+                        activity = submission.activities[0]
+                        if activity.final_hours is not None:
+                            submission_data['final_hours'] = activity.final_hours
+                        
+                        if activity.final_category_id:
+                            category = self.activity_category_repository.get_by_id(
+                                session, activity.final_category_id
+                            )
+                            if category:
+                                submission_data['category_name'] = category.name
                     
                     submission_list.append(submission_data)
                 
