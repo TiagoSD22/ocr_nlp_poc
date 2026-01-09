@@ -59,14 +59,16 @@ class ServiceModule(Module):
         s3_service: S3Service,
         kafka_service: KafkaService,
         student_service: StudentService,
-        submission_repository: CertificateSubmissionRepository
+        submission_repository: CertificateSubmissionRepository,
+        activity_category_repository: ActivityCategoryRepository
     ) -> CertificateSubmissionService:
         """Provide certificate submission service instance."""
         return CertificateSubmissionService(
             s3_service, 
             kafka_service, 
             student_service, 
-            submission_repository
+            submission_repository,
+            activity_category_repository
         )
     
     @singleton
