@@ -23,6 +23,9 @@ class CertificateSubmission(Base):
     submitted_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     processing_started_at = Column(DateTime)
     processing_completed_at = Column(DateTime)
+    rejected_at = Column(DateTime)
+    rejection_reason = Column(String(1000))
+    rejected_by = Column(String(100))
     
     # Relationships
     student = relationship('Student', back_populates='submissions')
@@ -47,5 +50,8 @@ class CertificateSubmission(Base):
             'error_message': self.error_message,
             'submitted_at': self.submitted_at.isoformat() if self.submitted_at else None,
             'processing_started_at': self.processing_started_at.isoformat() if self.processing_started_at else None,
-            'processing_completed_at': self.processing_completed_at.isoformat() if self.processing_completed_at else None
+            'processing_completed_at': self.processing_completed_at.isoformat() if self.processing_completed_at else None,
+            'rejected_at': self.rejected_at.isoformat() if self.rejected_at else None,
+            'rejection_reason': self.rejection_reason,
+            'rejected_by': self.rejected_by
         }
