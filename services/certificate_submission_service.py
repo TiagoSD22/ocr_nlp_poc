@@ -257,7 +257,7 @@ class CertificateSubmissionService:
                     if submission.error_message:
                         submission_data['error_message'] = submission.error_message
                     
-                    # Add final_hours and category_name for approved submissions
+                    # Add coordinator notes for approved or rejected submissions
                     if submission.status == 'approved' and submission.activities:
                         # Get first activity (assuming one activity per submission)
                         activity = submission.activities[0]
@@ -270,6 +270,17 @@ class CertificateSubmissionService:
                             )
                             if category:
                                 submission_data['category_name'] = category.name
+                        
+                        # Include override reasoning if coordinator made changes
+                        if activity.override_reasoning:
+                            submission_data['coordinator_notes'] = activity.override_reasoning
+                    
+                    elif submission.status == 'rejected':
+                        # Include rejection reason for rejected submissions
+                        if submission.rejection_reason:
+                            submission_data['coordinator_notes'] = submission.rejection_reason
+                        if submission.rejected_at:
+                            submission_data['rejected_at'] = submission.rejected_at.isoformat()
                     
                     submission_list.append(submission_data)
                 
