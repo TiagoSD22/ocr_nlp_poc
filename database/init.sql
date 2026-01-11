@@ -41,6 +41,9 @@ CREATE TABLE certificate_submissions (
     submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     processing_started_at TIMESTAMP,
     processing_completed_at TIMESTAMP,
+    rejected_at TIMESTAMP,
+    rejection_reason VARCHAR(1000),
+    rejected_by VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     -- Composite unique constraint: same student cannot submit same file twice
